@@ -11,3 +11,7 @@
 
 # player models ship as binary files
 *.glb binary
+
+# Windows batch files need CRLF line endings
+*.cmd text eol=crlf
+*.bat text eol=crlf

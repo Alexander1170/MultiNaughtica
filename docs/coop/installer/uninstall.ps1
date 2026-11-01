@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
-    Removes the Nitrox co-op build that install.ps1 installed: the program files, the shortcuts, optionally the settings and the worlds.
+    Removes the MultiNaughtica build that install.ps1 installed: the program files, the shortcuts, optionally the settings and the worlds.
 
 .DESCRIPTION
     Removes only the files that the installer put there (the list is in installed-files.txt next to the program), one by one, then the folders that became empty. Anything else in the
     folder (a file you put there yourself) stays. Your worlds (%APPDATA%\Nitrox\saves) are kept unless you ask for them to go (-RemoveSaves, and you have to type a word to confirm).
 
-.PARAMETER InstallDir    The install folder (default: the folder this script is in, else %LOCALAPPDATA%\NitroxCoop).
+.PARAMETER InstallDir    The install folder (default: the folder this script is in, else %LOCALAPPDATA%\MultiNaughtica).
 .PARAMETER TestRoot      Test mode: works on the test install of install.ps1 -TestRoot and touches nothing else.
 .PARAMETER DryRun        Only report.
 .PARAMETER Yes           Do not ask for confirmation (never deletes worlds without -RemoveSaves).
@@ -50,14 +50,14 @@ function Remove-FilesOf([string]$root) {
 
 try {
     Say ''
-    Say '=== Nitrox Co-op uninstaller ===' 'Cyan'
+    Say '=== MultiNaughtica uninstaller ===' 'Cyan'
     if ($TestRoot) { Say "TEST MODE: works on the test install in $TestRoot only." 'Yellow' }
     if ($DryRun) { Say 'DRY RUN: nothing will be changed.' 'Yellow' }
 
     if (-not $InstallDir) {
         if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'installed-files.txt')) { $InstallDir = $PSScriptRoot }
-        elseif ($TestRoot) { $InstallDir = Join-Path $TestRoot 'NitroxCoop' }
-        else { $InstallDir = Join-Path $env:LOCALAPPDATA 'NitroxCoop' }
+        elseif ($TestRoot) { $InstallDir = Join-Path $TestRoot 'MultiNaughtica' }
+        else { $InstallDir = Join-Path $env:LOCALAPPDATA 'MultiNaughtica' }
     }
     $InstallDir = [System.IO.Path]::GetFullPath($InstallDir.Trim('"'))
     $manifest = Join-Path $InstallDir 'installed-files.txt'
@@ -72,14 +72,14 @@ try {
     $files = @(Get-Content -LiteralPath $manifest | Where-Object { $_ })
     Say "Folder: $InstallDir ($($files.Count) program files)"
     if (-not $Yes -and -not $DryRun) {
-        $answer = (Read-Host '  Remove Nitrox Co-op from this PC? Your worlds are kept. [y/N]').Trim().ToLowerInvariant()
+        $answer = (Read-Host '  Remove MultiNaughtica from this PC? Your worlds are kept. [y/N]').Trim().ToLowerInvariant()
         if ($answer -notin @('y', 'yes', 'j', 'ja')) { Say 'Nothing was changed.'; exit 0 }
     }
 
     # shortcuts
     if ($TestRoot) { $desktop = Join-Path $TestRoot 'Shortcuts\Desktop'; $menu = Join-Path $TestRoot 'Shortcuts\StartMenu' }
     else { $desktop = [Environment]::GetFolderPath('Desktop'); $menu = [Environment]::GetFolderPath('Programs') }
-    foreach ($link in @((Join-Path $desktop 'Nitrox Co-op.lnk'), (Join-Path $menu 'Nitrox Co-op.lnk'), (Join-Path $menu 'Uninstall Nitrox Co-op.lnk'))) {
+    foreach ($link in @((Join-Path $desktop 'MultiNaughtica.lnk'), (Join-Path $menu 'MultiNaughtica.lnk'), (Join-Path $menu 'Uninstall MultiNaughtica.lnk'))) {
         if (Test-Path -LiteralPath $link) {
             if ($DryRun) { Say-Dry "remove the shortcut $link" } else { Remove-Item -LiteralPath $link -Force; Say "  Removed shortcut: $link" }
         }

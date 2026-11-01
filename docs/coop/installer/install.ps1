@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
-    One-click installer of the Nitrox co-op build for a friend (double-click Install.cmd, which starts this script).
+    One-click installer of MultiNaughtica for a friend (double-click Install.cmd, which starts this script).
 
 .DESCRIPTION
     What it does, in order (each step says what it is doing in plain words):
       1. Looks for the two free Microsoft runtimes the program needs (.NET Runtime 10 and ASP.NET Core Runtime 10, 64 bit) and installs whichever is missing:
          winget first, else the official installer from Microsoft's own download address (checked against the checksum Microsoft publishes).
-      2. Copies the program into %LOCALAPPDATA%\NitroxCoop (or the folder you pick), removes the "downloaded from the internet" mark from the files and makes a desktop and a Start menu
-         shortcut. Running it again updates in place; the worlds and settings (in %APPDATA%\Nitrox) are never touched; a different co-op build is only replaced after asking.
+      2. Copies the program into %LOCALAPPDATA%\MultiNaughtica (or the folder you pick), removes the "downloaded from the internet" mark from the files and makes a desktop and a Start menu
+         shortcut. Running it again updates in place; the worlds and settings (in %APPDATA%\Nitrox) are never touched; a different MultiNaughtica build is only replaced after asking.
       3. Finds Subnautica (Steam registry, Steam library folders, Epic, common folders) and tells the launcher where it is (HKCU\SOFTWARE\Nitrox\PreferredGamePath).
       4. Asks for the server address the host gave you and puts it in the game's server list (Enter skips this).
 
@@ -15,11 +15,11 @@
     installs a runtime.  -DryRun  only reports what would be done.  Both can be combined.
 
 .PARAMETER PayloadDir      The folder with the program (default: the folder this script is in, the root of the unzipped zip).
-.PARAMETER InstallDir      Where to install (default %LOCALAPPDATA%\NitroxCoop). Asked for unless -Yes is given.
+.PARAMETER InstallDir      Where to install (default %LOCALAPPDATA%\MultiNaughtica). Asked for unless -Yes is given.
 .PARAMETER TestRoot        Test mode, see above.
 .PARAMETER DryRun          Only report.
-.PARAMETER Yes             Take the default for every question (never replaces a different co-op build without -Force).
-.PARAMETER Force           Replace a different co-op build without asking.
+.PARAMETER Yes             Take the default for every question (never replaces a different MultiNaughtica build without -Force).
+.PARAMETER Force           Replace a different MultiNaughtica build without asking.
 .PARAMETER GamePath        Use this Subnautica folder instead of searching.
 .PARAMETER ServerAddress   The address the host gave you (address or address:port); skips the question.
 .PARAMETER ServerName      Name of the server entry in the list (default "Co-op host").
@@ -50,9 +50,9 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $script:Simulate = [bool]$DryRun
-$script:LogFile = Join-Path $env:TEMP 'NitroxCoop-install.log'
+$script:LogFile = Join-Path $env:TEMP 'MultiNaughtica-install.log'
 $script:Warnings = New-Object System.Collections.Generic.List[string]
-$script:ProductName = 'Nitrox Co-op'
+$script:ProductName = 'MultiNaughtica'
 $script:InstallerFiles = @('Install.cmd', 'install.ps1')   # not copied into the install folder (a new zip brings its own)
 $script:ManifestName = 'installed-files.txt'
 $script:Steps = 5
@@ -397,7 +397,7 @@ try {
     # ---------------------------------------------------------------------------- 2 where to
     Say-Step 2 'installing the program'
     if (-not $InstallDir) {
-        $InstallDir = if ($TestRoot) { Join-Path $TestRoot 'NitroxCoop' } else { Join-Path $env:LOCALAPPDATA 'NitroxCoop' }
+        $InstallDir = if ($TestRoot) { Join-Path $TestRoot 'MultiNaughtica' } else { Join-Path $env:LOCALAPPDATA 'MultiNaughtica' }
         if (-not $TestRoot) { $InstallDir = Ask 'Install into this folder? Press Enter, or type another folder' $InstallDir }
     }
     $InstallDir = [System.IO.Path]::GetFullPath($InstallDir.Trim('"'))
@@ -467,8 +467,8 @@ try {
     $uninstallLink = Join-Path $shortcuts.StartMenu "Uninstall $script:ProductName.lnk"
     if ($script:Simulate) { Say-Dry "make the shortcuts '$script:ProductName' on the desktop and in the Start menu (and 'Uninstall $script:ProductName' in the Start menu)" }
     else {
-        New-Shortcut $desktopLink $launcher $InstallDir 'Nitrox, the multiplayer mod for Subnautica (co-op build)'
-        New-Shortcut $menuLink $launcher $InstallDir 'Nitrox, the multiplayer mod for Subnautica (co-op build)'
+        New-Shortcut $desktopLink $launcher $InstallDir 'MultiNaughtica, a Nitrox-based multiplayer mod for Subnautica'
+        New-Shortcut $menuLink $launcher $InstallDir 'MultiNaughtica, a Nitrox-based multiplayer mod for Subnautica'
         if (Test-Path -LiteralPath (Join-Path $InstallDir 'Uninstall.cmd')) { New-Shortcut $uninstallLink (Join-Path $InstallDir 'Uninstall.cmd') $InstallDir "Remove $script:ProductName from this PC" }
         Say "  Desktop:    $desktopLink" 'Green'
         Say "  Start menu: $menuLink" 'Green'

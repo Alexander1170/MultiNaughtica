@@ -13,7 +13,7 @@ On top of Nitrox's multiplayer, this fork has (see `docs/coop` for the details o
 **Vehicles and the Cyclops** (`docs/coop/VEHICLE_UPGRADES.md`)
 - New vehicle modules: deeper depth modules for the Seamoth, the Prawn Suit and the Cyclops, a Seamoth afterburner, solar chargers, tow hooks, a Seamoth rider bar, and a Cyclops power share that charges nearby vehicles and draws emergency power from a docked one.
 - Two extra module slots on every vehicle, and eight quick slots for the player instead of five (the keys 6, 7 and 8 can be rebound in the options).
-- Cyclops crew stations, each for a second player: a navigator (terrain hologram, map console, marks and a sonar ping), a gunner (fires stasis spheres from the hull), an engineer (routes power, manages overheating and damage on a PDA page) and a scout drone you can fly from a drone bay. Some of these have had little testing in a real game: expect rough edges.
+- Cyclops crew stations, each for a second player: a navigator (terrain hologram, map console, marks and a sonar ping), a gunner (fires stasis spheres from the hull), an engineer (routes power, manages overheating and damage on a PDA page) and a scout drone you can fly from a drone bay. The author has tested these stations by hand in the game, but they are new: expect rough edges.
 - A server setting for the numbers of all of these, in `server.cfg`.
 
 **Teamwork**
@@ -38,9 +38,9 @@ On top of Nitrox's multiplayer, this fork has (see `docs/coop` for the details o
 
 1. Download the zip from the Releases page and unzip it anywhere (not into the Subnautica folder, not into `Program Files`).
 2. Double-click **`Install.cmd`**. It installs the two runtimes if they are missing, finds Subnautica, sets everything up and asks for the server address your host gave you (Enter skips that).
-3. Start **Nitrox Co-op** from your desktop and press **PLAY MULTIPLAYER**. In the game choose **Multiplayer**, pick the server and join.
+3. Start **MultiNaughtica** from your desktop and press **PLAY MULTIPLAYER**. In the game choose **Multiplayer**, pick the server and join.
 
-`docs/coop/INSTALL.md` (also in the zip) has the details for players and for the host, and what to do when something goes wrong. To remove it, use **Uninstall Nitrox Co-op** from the Start menu; your worlds are kept.
+`docs/coop/INSTALL.md` (also in the zip) has the details for players and for the host, and what to do when something goes wrong. To remove it, use **Uninstall MultiNaughtica** from the Start menu; your worlds are kept.
 
 ## Hosting a game
 

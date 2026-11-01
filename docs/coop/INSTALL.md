@@ -6,13 +6,13 @@ You need your own copy of **Subnautica** (the first game) on Steam. Everything e
 
 1. **Unzip** the zip (right-click it, Extract All) anywhere.
 2. **Double-click `Install.cmd`** in the unzipped folder. If Windows says "Windows protected your PC", click **More info**, then **Run anyway**. It installs what is missing, finds Subnautica by itself and asks for the **server address your host gave you** (press Enter if you do not have it yet).
-3. Wait for **"Done, start Nitrox Co-op from your desktop"**.
-4. **Start "Nitrox Co-op" from your desktop** and press **PLAY MULTIPLAYER**. (The first time, the launcher may ask to restart as administrator: allow it.)
+3. Wait for **"Done, start MultiNaughtica from your desktop"**.
+4. **Start "MultiNaughtica" from your desktop** and press **PLAY MULTIPLAYER**. (The first time, the launcher may ask to restart as administrator: allow it.)
 5. In the game choose **Multiplayer**, click your host's server, type your name and press **Join**. The first load takes a minute or two; when the game says "Press any button", press one.
 
-To play the normal single-player game, press **SINGLEPLAYER** in the launcher. To remove everything, run **Uninstall Nitrox Co-op** from the Start menu (your worlds are kept). Running `Install.cmd` again is safe: it updates in place and keeps your worlds and settings; it asks before it replaces a different co-op build.
+To play the normal single-player game, press **SINGLEPLAYER** in the launcher. To remove everything, run **Uninstall MultiNaughtica** from the Start menu (your worlds are kept). Running `Install.cmd` again is safe: it updates in place and keeps your worlds and settings; it asks before it replaces a different co-op build.
 
-If something goes wrong, the installer says why in plain words and writes `%TEMP%\NitroxCoop-install.log`; send that file to your host. Everybody who plays together must use **the same zip**: the game refuses a server of another build and tells you which one it is.
+If something goes wrong, the installer says why in plain words and writes `%TEMP%\MultiNaughtica-install.log`; send that file to your host. Everybody who plays together must use **the same zip**: the game refuses a server of another build and tells you which one it is.
 
 ## Player models (optional)
 
@@ -58,7 +58,7 @@ The first start of an existing world with this build repairs it once (duplicate 
 
 ## When something goes wrong
 
-- **The installer stops with a sentence**: the sentence says what to do (close the program, unzip the whole zip first, ...). The full log is `%TEMP%\NitroxCoop-install.log`.
+- **The installer stops with a sentence**: the sentence says what to do (close the program, unzip the whole zip first, ...). The full log is `%TEMP%\MultiNaughtica-install.log`.
 - **"You must install .NET to run this application"** when the launcher starts: the two runtimes are missing; run `Install.cmd` again (it installs them) or see the host section.
 - **"Unable to contact the remote server"**: the server is not running, the address is wrong, or UDP 11000 is blocked (Windows Firewall on the host, the router, or Tailscale not connected on one side). Try from the host's own PC first with `127.0.0.1`.
 - **"The server refused the connection ... another build"**: the zips differ.

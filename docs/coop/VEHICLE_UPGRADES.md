@@ -4,6 +4,12 @@ New modules for the Seamoth, the Prawn Suit and the Cyclops (depth modules, an a
 nothing else: no mod loader, no extra files. Everything below can be changed by the host in `server.cfg`; players learn the numbers when they
 join, and the tooltips of the modules show the real numbers of the server.
 
+## How well this has been tested
+
+- **Tested by hand in the game by the author:** the gunner station, the navigator's hologram with marks, routes and the full rotation of the map, the helm map and its buttons, the engineer's PDA screen, the scout drone (collisions, loading it and the fly screen, docking), the Seamoth rider bar, the quick slots 5 to 8, and the tow hook.
+- **Checked in a live run in a survival world:** the solar plus at the Cyclops helm by day and by night, power sharing to a Seamoth, and the engineer's fire and breach marks.
+- **Not checked in the game:** solar charging at depth. The rest of this page has unit tests and has been played less, or not at all; the sections say so where they know it.
+
 ## The modules
 
 | Module | Vehicle | Crafted at | Recipe | Unlocks with |
@@ -161,8 +167,8 @@ the rider looks is sent (about 15 times a second while it changes; the others se
 
 ### Cyclops Terrain Sonar and the navigator console (feature group 3, station 1)
 
-A passive Cyclops module (**only one counts**) that turns the cockpit into a place for two people: the pilot and a navigator. **Built (milestones 1 to 5, not yet seen in the game beyond what the first live probes showed): the helm hologram, the console with its map and icons, the marks, the route, the clearance warnings and the sonar ping.**
-What a live run has shown and what is still unseen is listed at the end of this section.
+A passive Cyclops module (**only one counts**) that turns the cockpit into a place for two people: the pilot and a navigator. **Built (milestones 1 to 5): the helm hologram, the console with its map and icons, the marks, the route, the clearance warnings and the sonar ping. Tested by hand in the game: the hologram with the marks and the routes, the full rotation of the map, and the helm map with its buttons. The clearance warnings and the sonar ping have not been confirmed in the game.**
+What the first live probes showed, and what has not been confirmed, is listed at the end of this section.
 
 * **The hologram (milestone 1; in the build room since the play-test of coop.12).** The terrain around the Cyclops, within `TerrainSonarRange` metres (200 with the default, more while the engineer sends the power
   to the systems), as the game's own terrain hologram (the one of the scanner room and of the Seaglide's map), **floats in the middle of the build room**: the room between the helm and the vehicle bay ("Build room" on the
@@ -240,7 +246,7 @@ What a live run has shown and what is still unseen is listed at the end of this 
   is not next any more and is refused, and the pilot is told where the route really is, instead of a point being skipped). **The server's order is the route's order:** every point is relayed with its slot, a removal with
   the next point that results, so that two navigators who add at the same moment end up with the same route. Like the marks, the route belongs to the Cyclops, is not
   saved with the world, and is gone with the Cyclops or a restart; a player who joins later is told the route and which point is next. The line in the water is drawn with the game's own sprite shader, which the
-  tow cable showed to be there; **how it looks under water at a distance has not been seen yet** (the live check takes pictures of it).
+  tow cable showed to be there; **how it looks under water at a distance has not been checked separately**.
 * **Clearance warnings (milestone 5).** While you are aboard, five times a second the Cyclops casts spheres (1 m) from the faces of its hull's box at the terrain's colliders: port, starboard, above and below, at five
   places along the keel, as far as `ClearanceWarningDistance` (20 m by default, 5 to 60), and three more ahead along the way it moves (astern while it reverses). **Ahead the warning distance grows with the speed:** it is five seconds of travel (never less than the
   setting, at most 100 m), and the red line is 35 percent of it, so the faster the Cyclops goes the earlier a wall is reported; a wall at the side of the nose counts as a side, not as ahead. The tightest gap, in proportion to the
@@ -253,16 +259,14 @@ What a live run has shown and what is still unseen is listed at the end of this 
   The energy of a Cyclops is only changed by the client that simulates it (the pilot's), so a navigator who is not the pilot asks that client through the server and is told if it did not work ("The ping needs
   the Cyclops Sonar Module", "The Cyclops has not the power for a ping", "Nobody is running the Cyclops"); a navigator who is the pilot does it at once.
 * **What the live probes have shown so far (2026-10-28):** the display at the helm is lit by the Terrain Sonar alone, the game's mesh unit measured 3.87 m (128 m for the largest chunk mesh of 33.1 units, a size that may include the chunk's skirt; the code uses 4.0 m until a picture of the helm shows the terrain off by a few percent, and `vuhelm scale` corrects it), the helm hologram costs nothing measurable at 200 m
-  and about 0.2 to 1 ms at 500 m, marks reach the other player through the server and have their HUD pings on both sides, the console opens and draws its overlay. **Not seen yet:** the hand target found by the
-  eye from where a player stands, the hologram and its icons in a picture from the desk, the line in the water, the arrow, the guidance and the advance, the clearance warnings, the sonar ping and
-  how all of it looks on a screen.
+  and about 0.2 to 1 ms at 500 m, marks reach the other player through the server and have their HUD pings on both sides, the console opens and draws its overlay. **Tested by hand since then:** the hologram with its icons, the marks and the routes, the full rotation of the map, and the helm map with its buttons. **Not confirmed in the game:** the clearance warnings and the sonar ping.
 * **Off.** With `VehicleUpgrades=false` the module does nothing and the display is the game's.
 
 ### Cyclops Gunner Station (feature group 3, station 2)
 
 A passive Cyclops module (**only one counts**) that turns the **right** desk of the cockpit (the pilot's right, the hull's starboard side, the one with the sub-name screen and the lighting panel) into a **gunner
-station**: a second player looks through a turret on the hull and fires **stasis spheres** at what threatens the Cyclops. **Built, not yet seen in the game: everything below is code that has been tested in pieces only.**
-What the first live run has to show is listed at the end of this section.
+station**: a second player looks through a turret on the hull and fires **stasis spheres** at what threatens the Cyclops. **The gunner station has been tested by hand in the game; the details below were written before that test.**
+The list at the end of this section is what the first test had to confirm.
 
 * **The desk.** Look at the middle of the right desk (between the sub-name screen and the lighting panel's buttons) and use it: "Use gunner station". Under the text stands the name of the player who is at the desk
   already, if somebody is. **One gunner per Cyclops, the first to ask gets the seat** (the server decides; a player who joins later is told who sits where). The seat is given up when the gunner leaves the desk,
@@ -292,7 +296,7 @@ What the first live run has to show is listed at the end of this section.
 * **Not a security boundary.** The seat and the cooldown stop an honest client from firing unpaid shots; the flight of the sphere is relayed like the rifle's, unchecked, as the Stasis Rifle's always was.
 * **What stays as it was.** The desk is a different object from the navigator's: the route line, the route arrow and the clearance text step aside while either console is open. The lighting panel's buttons
   (the lights, the Power Share and the Tow Hook) are not touched: the hand target keeps clear of them. **No button was added to the lighting panel.**
-* **What the first live run has to show, and what is still unseen:** the hand target found by the eye from where a player stands; the camera at the mount (the look of the water, the fog and the surface from
+* **What the first test had to show (written before the test; the gunner station has since been tested by hand in the game):** the hand target found by the eye from where a player stands; the camera at the mount (the look of the water, the fog and the surface from
   the tower; the pose sync keeping the gunner at the desk for the other client); the look delta under the input group with the cursor locked; the scanned horizon against the table; the sphere leaving the mount
   and hitting something below it (the trigger boxes); the payment (survival), the free shot (creative), the cooldown, the refusals; the other client replaying the shot (a counter and a log line say so); the seat
   ending on disconnect, death and a destroyed Cyclops; a creature that moves again when the field ends or the gunner leaves.
@@ -301,7 +305,7 @@ What the first live run has to show is listed at the end of this section.
 ### Cyclops Engineer Console (feature group 3, station 3)
 
 A passive Cyclops module (**only one counts**) that puts a **panel on the engine in the engine room** and makes it the **engineer's console**: a second player runs the power of the Cyclops, keeps the engine from
-overheating and watches the damage. **Built, not yet seen in the game: everything below is code that has been tested in pieces only.** What the first live run has to show is listed at the end of this section.
+overheating and watches the damage. **The engineer's PDA screen has been tested by hand in the game, and the fire and breach marks were checked in a live survival-world run. The rest (the effect of the routes on speed, the heat steps, the overdrive, the vent, the noise and the emergency line with a docked vehicle) is code that has been tested in pieces and has not been confirmed in the game.** The list at the end of this section is what the first test had to confirm.
 
 * **The panel.** The engine room's own console (the one with the screen, next to the engine) is the game's **Upgrade Console**, where the modules are installed, and stays that: the engineer's console is a small panel
   that the mod builds on the same face of the engine, about two metres aft of it, facing the walkway on the port side ("ENGINEER", the route that is set, who sits there). Look at it from the walkway and use it:
@@ -344,7 +348,7 @@ overheating and watches the damage. **Built, not yet seen in the game: everythin
 * **Not saved.** The route and the cooldowns live on the server and are not saved with the world: a restarted server starts with the power balanced. (They were meant to travel in the lighting panel's metadata like
   the Power Share switch; that object is rewritten whole by every light press of every player, which would have overwritten the route with a passenger's stale copy.)
 * **What stays as it was.** The game's Upgrade Console, the lighting panel and the desks are not touched. The tow slow-down and the engineer's speed are one patch on the game's physics step.
-* **What the first live run has to show, and what is still unseen:** the hand target found by the eye from the walkway (its facing is inferred from the slope of the Upgrade Console's keys) and the panel
+* **What the first test had to show (written before the test; the PDA screen and the fire and breach marks have since been checked, see above):** the hand target found by the eye from the walkway (its facing is inferred from the slope of the Upgrade Console's keys) and the panel
   (position, legibility, whether it hangs in the air or in the engine); the Upgrade Console still usable; the PDA opening on the engineer's page (the picture, the bubbles in the look of the equipment slots, the sizes of the texts, the heat bar; Escape and walking away closing it); the bubbles under the real cursor; whether a 15 percent bigger acceleration gives a 15 percent
   higher top speed (the tow slow-down did scale that way); the heat steps and the gauge; the overdrive's boost; the vent; the noise and the creatures' reaction; the breaches and fires in the picture and the
   suppression; the emergency line with a docked vehicle.
@@ -362,8 +366,8 @@ The log lines, all `[VehicleUpgrades] <station>: ...`: `mouse button N pressed, 
 
 ### Cyclops Drone Bay and Scout Drone (feature group 3, station 4)
 
-A passive Cyclops module (**Cyclops Drone Bay**) and a craftable item (**Scout Drone**), both from the Cyclops Fabricator. The design is in the side-session note scout_drone_design.md; this section describes what is built so far
-(the console and the drone on the client, the other players: the seat, the bay on the server, the drone's movement and health, the marks and the zapper).
+A passive Cyclops module (**Cyclops Drone Bay**) and a craftable item (**Scout Drone**), both from the Cyclops Fabricator. This section describes what is built so far
+(the console and the drone on the client, the other players: the seat, the bay on the server, the drone's movement and health, the marks and the zapper). Tested by hand in the game: the drone's collisions, loading it and the fly screen, and docking. The zapper and the range limit have not been confirmed in the game.
 
 * **The drone** is the game's own camera drone (`MapRoomCamera`) of a clone of its prefab with its own TechType, so nothing changes for the scanner room's cameras. It keeps what the game gives it: the controls (look,
   move in six directions, auto-move, the light, the exit key), the HUD (health, battery, distance, "connecting", "no signal"), the screen static, the first move input undocks it. What the mod changes: the thrust
