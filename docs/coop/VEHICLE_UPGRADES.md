@@ -6,7 +6,7 @@ join, and the tooltips of the modules show the real numbers of the server.
 
 ## How well this has been tested
 
-- **Tested by hand in the game by the author:** the gunner station, the navigator's hologram with marks, routes and the full rotation of the map, the helm map and its buttons, the engineer's PDA screen, the scout drone (collisions, loading it and the fly screen, docking), the Seamoth rider bar, the quick slots 5 to 8, and the tow hook.
+- **Tested by hand in the game by the author:** the gunner station, the navigator's hologram with marks, routes and the full rotation of the map, the helm map and its buttons, the engineer's PDA screen, the scout drone (collisions, loading it and the fly screen, docking), the Seamoth rider bar, the quick slots 5 to 8, the tow hook, and the Seamoth afterburner (the power boost module).
 - **Checked in a live run in a survival world:** the solar plus at the Cyclops helm by day and by night, power sharing to a Seamoth, and the engineer's fire and breach marks.
 - **Not checked in the game:** solar charging at depth. The rest of this page has unit tests and has been played less, or not at all; the sections say so where they know it.
 
