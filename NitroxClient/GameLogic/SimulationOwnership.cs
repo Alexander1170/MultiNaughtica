@@ -1,0 +1,252 @@
+using System.Collections.Generic;
+using NitroxClient.Communication.Abstract;
+using NitroxClient.GameLogic.Simulation;
+using NitroxClient.GameLogic.VehicleUpgrades;
+using NitroxClient.MonoBehaviours;
+using Nitrox.Model.DataStructures;
+using Nitrox.Model.Subnautica.Packets;
+using UnityEngine;
+
+namespace NitroxClient.GameLogic
+{
+    public class SimulationOwnership
+    {
+        private readonly IMultiplayerSession multiplayerSession;
+        private readonly IPacketSender packetSender;
+        private readonly Dictionary<NitroxId, SimulationLockType> simulatedIdsByLockType = [];
+        private readonly Dictionary<NitroxId, float> lockAcquiredTimeById = [];
+        private readonly Dictionary<NitroxId, LockRequestBase> lockRequestsById = [];
+
+        private readonly Dictionary<NitroxId, SimulatedEntity> newerSimulationById = [];
+
+        public SimulationOwnership(IMultiplayerSession muliplayerSession, IPacketSender packetSender)
+        {
+            this.multiplayerSession = muliplayerSession;
+            this.packetSender = packetSender;
+        }
+        public bool PlayerHasMinLockType(NitroxId id, SimulationLockType lockType)
+        {
+            if (id != null && simulatedIdsByLockType.TryGetValue(id, out SimulationLockType playerLock))
+            {
+                return playerLock <= lockType;
+            }
+            return false;
+        }
+
+        public bool HasAnyLockType(NitroxId id)
+        {
+            return PlayerHasMinLockType(id, SimulationLockType.TRANSIENT);
+        }
+
+        public bool HasExclusiveLock(NitroxId id)
+        {
+            return PlayerHasMinLockType(id, SimulationLockType.EXCLUSIVE);
+        }
+
+        public void RequestSimulationLock(NitroxId id, SimulationLockType lockType)
+        {
+            SimulationOwnershipRequest ownershipRequest = new SimulationOwnershipRequest(multiplayerSession.Reservation.SessionId, id, lockType);
+            packetSender.Send(ownershipRequest);
+        }
+
+        public void RequestSimulationLock(LockRequestBase lockRequest)
+        {
+            lockRequestsById[lockRequest.Id] = lockRequest;
+            RequestSimulationLock(lockRequest.Id, lockRequest.LockType);
+        }
+
+        public void ReceivedSimulationLockResponse(NitroxId id, bool lockAquired, SimulationLockType lockType)
+        {
+            Log.Info($"Received lock response, id: {id} {lockAquired} {lockType}");
+
+            if (lockAquired)
+            {
+                SimulateEntity(id, lockType);
+                TreatVehicleEntity(id, true, lockType);
+            }
+
+            if (lockRequestsById.TryGetValue(id, out LockRequestBase lockRequest))
+            {
+                lockRequest.LockRequestComplete(id, lockAquired);
+                lockRequestsById.Remove(id);
+            }
+        }
+
+        public void SimulateEntity(NitroxId id, SimulationLockType lockType)
+        {
+            if (!simulatedIdsByLockType.ContainsKey(id))
+            {
+                lockAcquiredTimeById[id] = Time.time;
+            }
+            simulatedIdsByLockType[id] = lockType;
+        }
+
+        public void StopSimulatingEntity(NitroxId id)
+        {
+            simulatedIdsByLockType.Remove(id);
+            lockAcquiredTimeById.Remove(id);
+        }
+
+        /// <returns>True if we simulate the entity, with the seconds since we took over</returns>
+        public bool TryGetLockAge(NitroxId id, out float seconds)
+        {
+            if (simulatedIdsByLockType.ContainsKey(id) && lockAcquiredTimeById.TryGetValue(id, out float acquiredTime))
+            {
+                seconds = Time.time - acquiredTime;
+                return true;
+            }
+            seconds = 0f;
+            return false;
+        }
+
+        public void TreatSimulatedEntity(SimulatedEntity simulatedEntity)
+        {
+            bool isLocalPlayerNewOwner = multiplayerSession.Reservation.SessionId == simulatedEntity.SessionId;
+
+            if (TreatVehicleEntity(simulatedEntity.Id, isLocalPlayerNewOwner, simulatedEntity.LockType) ||
+                newerSimulationById.ContainsKey(simulatedEntity.Id))
+            {
+                return;
+            }
+
+            if (isLocalPlayerNewOwner)
+            {
+                if (simulatedEntity.ChangesPosition)
+                {
+                    EntityPositionBroadcaster.WatchEntity(simulatedEntity.Id);
+                }
+
+                SimulateEntity(simulatedEntity.Id, simulatedEntity.LockType);
+            }
+            else if (HasAnyLockType(simulatedEntity.Id))
+            {
+                // The server has forcibly removed this lock from the client.  This is generally fine for
+                // transient locks because it is only broadcasting position.  However, exclusive locks may
+                // need additional cleanup (such as a person piloting a vehicle - they need to be kicked out)
+                // We can later add a forcibly removed callback but as of right now we have no use-cases for
+                // forcibly removing an exclusive lock.  Just log it if it happens....
+
+                if (HasExclusiveLock(simulatedEntity.Id))
+                {
+                    Log.Warn($"The server has forcibly revoked an exclusive lock - this may cause undefined behaviour.  GUID: {simulatedEntity.Id}");
+                }
+
+                StopSimulatingEntity(simulatedEntity.Id);
+                EntityPositionBroadcaster.StopWatchingEntity(simulatedEntity.Id);
+                BleederClaims.OnLockLost(simulatedEntity.Id);
+            }
+
+            // Avoid keeping artifacts of the entity's previous ChangesPosition state
+            if (!simulatedEntity.ChangesPosition && NitroxEntity.TryGetComponentFrom(simulatedEntity.Id, out RemotelyControlled remotelyControlled))
+            {
+                // A loose item that no longer moves (a Stalker dropped it, the propulsion cannon let go) stays where the other player left it: kinematic, like every loose item
+                // starts out, so that nothing on this client alone (a piece falling next to it) can push it away from the position the server has
+                if (remotelyControlled.TryGetComponent(out Pickupable _) && !remotelyControlled.GetComponent<Creature>() && remotelyControlled.TryGetComponent(out Rigidbody body))
+                {
+                    UWE.Utils.SetIsKinematicAndUpdateInterpolation(body, true, false);
+                }
+                Object.Destroy(remotelyControlled);
+            }
+        }
+
+        public void DropSimulationFrom(NitroxId entityId)
+        {
+            bool hadLock = HasAnyLockType(entityId);
+            StopSimulatingEntity(entityId);
+            if (hadLock)
+            {
+                VehicleTows.OnVehicleLockLost(entityId);
+            }
+            EntityPositionBroadcaster.StopWatchingEntity(entityId);
+            BleederClaims.OnLockLost(entityId);
+            if (!NitroxEntity.TryGetObjectFrom(entityId, out GameObject gameObject))
+            {
+                return;
+            }
+
+            if (gameObject.TryGetComponent(out RemotelyControlled remotelyControlled))
+            {
+                Object.Destroy(remotelyControlled);
+            }
+        }
+
+        public bool TryGetLockType(NitroxId nitroxId, out SimulationLockType simulationLockType)
+        {
+            return simulatedIdsByLockType.TryGetValue(nitroxId, out simulationLockType);
+        }
+
+        public bool TreatVehicleEntity(NitroxId entityId, bool isLocalPlayerNewOwner, SimulationLockType simulationLockType)
+        {
+            if (!NitroxEntity.TryGetObjectFrom(entityId, out GameObject gameObject) || !IsVehicle(gameObject))
+            {
+                return false;
+            }
+            
+            MovementReplicator movementReplicator = gameObject.GetComponent<MovementReplicator>();
+            if (isLocalPlayerNewOwner)
+            {
+                if (movementReplicator)
+                {
+                    Object.Destroy(movementReplicator);
+                }
+                MovementBroadcaster.RegisterWatched(gameObject, entityId);
+                SimulateEntity(entityId, simulationLockType);
+            }
+            else
+            {
+                bool hadLock = HasAnyLockType(entityId);
+                if (!movementReplicator)
+                {
+                    MovementReplicator.AddReplicatorToObject(gameObject);
+                }
+                MovementBroadcaster.UnregisterWatched(entityId);
+                StopSimulatingEntity(entityId);
+                if (hadLock)
+                {
+                    // A tow of this client ends when the lock of one of its vehicles moves to another player (somebody got into the towed vehicle)
+                    VehicleTows.OnVehicleLockLost(entityId);
+                }
+            }
+
+            return true;
+        }
+
+        public bool IsVehicle(GameObject gameObject)
+        {
+            if (gameObject.GetComponent<Vehicle>())
+            {
+                return true;
+            }
+            if (gameObject.TryGetComponent(out SubRoot subRoot) && !subRoot.isBase)
+            {
+                return true;
+            }
+            // The scout drone is flown like a vehicle: its operator's client sends its position 30 times a second (it is not a Vehicle, but it moves at the speed of one)
+            if (gameObject.GetComponent<NitroxClient.MonoBehaviours.Cyclops.ScoutDrone>())
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public void RegisterNewerSimulation(NitroxId entityId, SimulatedEntity simulatedEntity)
+        {
+            newerSimulationById[entityId] = simulatedEntity;
+        }
+
+        public void ApplyNewerSimulation(NitroxId nitroxId)
+        {
+            if (newerSimulationById.TryGetValue(nitroxId, out SimulatedEntity simulatedEntity))
+            {
+                newerSimulationById.Remove(nitroxId);
+                TreatSimulatedEntity(simulatedEntity);
+            }
+        }
+
+        public void ClearNewerSimulations()
+        {
+            newerSimulationById.Clear();
+        }
+    }
+}

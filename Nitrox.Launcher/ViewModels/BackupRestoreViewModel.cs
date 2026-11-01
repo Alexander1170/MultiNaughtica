@@ -1,0 +1,98 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using Avalonia.Collections;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Nitrox.Launcher.Models.Design;
+using Nitrox.Launcher.Models.Validators;
+using Nitrox.Launcher.ViewModels.Abstract;
+using Nitrox.Model.Constants;
+
+namespace Nitrox.Launcher.ViewModels;
+
+public partial class BackupRestoreViewModel : ModalViewModelBase
+{
+    [ObservableProperty]
+    public partial AvaloniaList<BackupItem> Backups { get; set; } = [];
+
+    [ObservableProperty]
+    public partial string? SaveFolderDirectory { get; set; }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RestoreBackupCommand))]
+    [NotifyDataErrorInfo]
+    [Backup]
+    public partial BackupItem? SelectedBackup { get; set; }
+
+    [ObservableProperty]
+    public partial string? Title { get; set; }
+
+    [RelayCommand(CanExecute = nameof(CanRestoreBackup))]
+    public void RestoreBackup() => Close(ButtonOptions.Ok);
+
+    public bool CanRestoreBackup() => !HasErrors;
+
+    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        switch (e.PropertyName)
+        {
+            case nameof(SaveFolderDirectory) when !string.IsNullOrWhiteSpace(SaveFolderDirectory) && Directory.Exists(SaveFolderDirectory):
+                Backups.Clear();
+                Backups.AddRange(GetBackups(SaveFolderDirectory));
+                break;
+        }
+    }
+
+    private static IEnumerable<BackupItem> GetBackups(string? saveDirectory)
+    {
+        IEnumerable<string> GetBackupFilePaths(string backupRootDir) =>
+            Directory.EnumerateFiles(backupRootDir, "*.zip")
+                     .Where(file =>
+                     {
+                         // Verify file name format of "Backup - {DateTime:BACKUP_DATE_TIME_FORMAT}.zip"
+                         string fileName = Path.GetFileNameWithoutExtension(file);
+                         if (!fileName.StartsWith("Backup - "))
+                         {
+                             return false;
+                         }
+
+                         string dateTimePart = fileName["Backup - ".Length..];
+                         return DateTime.TryParseExact(dateTimePart, PersistanceConstants.BACKUP_DATE_TIME_FORMAT, CultureInfo.InvariantCulture, DateTimeStyles.None, out _);
+                     })
+                     .OrderByDescending(file =>
+                     {
+                         string fileName = Path.GetFileNameWithoutExtension(file);
+                         string dateTimePart = fileName["Backup - ".Length..];
+                         return DateTime.TryParseExact(dateTimePart, PersistanceConstants.BACKUP_DATE_TIME_FORMAT, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsedDate)
+                             ? parsedDate
+                             : File.GetCreationTime(file);
+                     });
+
+        if (saveDirectory == null)
+        {
+            yield break;
+        }
+        string backupDir = Path.Combine(saveDirectory, "backups");
+        if (!Directory.Exists(backupDir))
+        {
+            yield break;
+        }
+
+        int i = 0;
+        foreach (string backupPath in GetBackupFilePaths(backupDir))
+        {
+            if (!DateTime.TryParseExact(Path.GetFileNameWithoutExtension(backupPath)["Backup - ".Length..], PersistanceConstants.BACKUP_DATE_TIME_FORMAT, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime backupDate))
+            {
+                backupDate = File.GetCreationTime(backupPath);
+            }
+            i++;
+            string backupName = $"[b]Backup {i})[/b]\t{backupDate}";
+            yield return new BackupItem(backupName, backupPath);
+        }
+    }
+}

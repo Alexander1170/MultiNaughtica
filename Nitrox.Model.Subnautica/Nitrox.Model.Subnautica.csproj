@@ -1,0 +1,21 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net472;net10.0</TargetFrameworks>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Nitrox.Model\Nitrox.Model.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="LitJson" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Reference Include="protobuf-net">
+            <HintPath>..\Nitrox.Assets.Subnautica\protobuf-net.dll</HintPath>
+        </Reference>
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,215 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using Nitrox.Model.Platforms.OS.Windows.Internal;
+
+namespace Nitrox.Model.Core;
+
+/// <summary>
+///     Environment helper for getting meta data about where and how Nitrox is running.
+/// </summary>
+public static class NitroxEnvironment
+{
+    private static bool hasSet;
+    private static Assembly? executingAssembly;
+    private static string? appName;
+    private static bool? isWine;
+    private static Assembly ExecutingAssembly => executingAssembly ??= Assembly.GetExecutingAssembly();
+    public static string ReleasePhase => IsReleaseMode ? "Alpha" : "InDev";
+    public static Version Version => ExecutingAssembly.GetName().Version ?? new Version(1, 0);
+
+    /// <summary>
+    ///     The number of this build of the co-op fork (the <c>CoopBuild</c> property of Directory.Build.props), or an empty text for a build that is not the fork.
+    /// </summary>
+    public static string CoopBuild => ExecutingAssembly.GetMetaData(nameof(CoopBuild)) ?? "";
+
+    public static bool IsCoopBuild => CoopBuild.Length > 0;
+
+    /// <summary>
+    ///     The version as the players see and compare it: <c>1.9.0.0-coop.1</c> for the co-op fork, the plain version otherwise.
+    /// </summary>
+    public static string CoopVersion => IsCoopBuild ? $"{Version}-coop.{CoopBuild}" : Version.ToString();
+
+    public static string VersionInfo
+    {
+        get
+        {
+            if (IsReleaseMode)
+            {
+                return $"{ReleasePhase} V{CoopVersion} {GitShortHash}";
+            }
+            return $"{ReleasePhase} {GitShortHash}";
+        }
+    }
+
+    public static DateTimeOffset BuildDate
+    {
+        get
+        {
+            string buildDateText = ExecutingAssembly.GetMetaData("BuildDate");
+            return DateTimeOffset.TryParse(buildDateText, out DateTimeOffset result) ? result : default;
+        }
+    }
+
+    public static string GitShortHash
+    {
+        get
+        {
+            if (ExecutingAssembly.GetMetaData("GitShortHash") is { Length: > 0 } shortHash)
+            {
+                return shortHash;
+            }
+
+            string gitHash = GitHash;
+            if (gitHash is { Length: > 0 })
+            {
+                gitHash = gitHash.Substring(0, Math.Min(10, gitHash.Length));
+            }
+            return gitHash;
+        }
+    }
+
+    public static int GameMinimumVersion
+    {
+        get
+        {
+            if (!int.TryParse(ExecutingAssembly.GetMetaData(nameof(GameMinimumVersion)), out int result))
+            {
+                throw new Exception("Failed to extract compatible game version number from embedded metadata");
+            }
+            return result;
+        }
+    }
+
+    public static string GitHash => ExecutingAssembly.GetMetaData("GitHash") ?? "";
+
+    public static Types Type { get; private set; } = Types.NORMAL;
+    public static bool IsTesting => Type == Types.TESTING;
+    public static bool IsNormal => Type == Types.NORMAL;
+
+    public static bool IsReleaseMode
+    {
+        get
+        {
+#if RELEASE
+                return true;
+#else
+            return false;
+#endif
+        }
+    }
+
+    /// <summary>
+    ///     Gets the current platform name (windows, linux, macos).
+    /// </summary>
+    public static string PlatformName
+    {
+        get
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return "windows";
+            }
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                return "macos";
+            }
+            return "linux";
+        }
+    }
+
+    /// <summary>
+    ///     Gets the current CPU architecture name (x64, arm64).
+    /// </summary>
+    public static string ArchitectureName => RuntimeInformation.OSArchitecture switch
+    {
+        Architecture.X64 => "x64",
+        Architecture.Arm64 => "arm64",
+        _ => "x64"
+    };
+
+    /// <summary>
+    ///     Gets the command line arguments as passed to the program on start.
+    /// </summary>
+    public static string[] CommandLineArgs
+    {
+        get
+        {
+            if (field != null)
+            {
+                return field;
+            }
+
+            IEnumerable<string> args = Environment.GetCommandLineArgs().Skip(1);
+            // Windows removes the ' character around an arg but other OSes do not.
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                args = args.Select(p => p.Trim('\''));
+            }
+            return field = args.ToArray();
+        }
+    }
+
+    public static string AppName => appName ??= (Assembly.GetEntryAssembly()?.GetName().Name ?? Assembly.GetCallingAssembly().GetName().Name)?.Replace(".", " ") ?? "Nitrox Program";
+
+    /// <summary>
+    ///     Returns true if executing in a Wine environment.
+    /// </summary>
+    public static bool IsWine
+    {
+        get
+        {
+            if (isWine.HasValue)
+            {
+                return isWine.Value;
+            }
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                isWine = false;
+                return false;
+            }
+
+            isWine = !string.IsNullOrWhiteSpace(Win32Native.GetWineVersion());
+            return isWine.Value;
+        }
+    }
+
+    public static string DotnetEnvironment
+    {
+        get
+        {
+            string? env = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
+            if (env is null)
+            {
+                const string COMPILE_ENV =
+#if DEBUG
+                        "Development"
+#else
+                        "Production"
+#endif
+                    ;
+                Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", env = COMPILE_ENV);
+            }
+            return env;
+        }
+    }
+
+    public static void Set(Types value)
+    {
+        if (hasSet)
+        {
+            throw new Exception("Environment type can only be set once");
+        }
+
+        Type = value;
+        hasSet = true;
+    }
+
+    public enum Types
+    {
+        NORMAL,
+        TESTING
+    }
+}

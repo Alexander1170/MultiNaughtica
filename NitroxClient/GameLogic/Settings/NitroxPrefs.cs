@@ -1,0 +1,89 @@
+using System;
+using NitroxClient.MonoBehaviours;
+using UnityEngine;
+
+namespace NitroxClient.GameLogic.Settings
+{
+    public class NitroxPrefs
+    {
+        // Add new fields here, you can use bool, float and int as type
+        public static readonly NitroxPref<bool> HideIp = new("Nitrox.hideIp");
+        /// <summary>
+        /// How long the chat window stays visible after receiving a message (in seconds).
+        /// </summary>
+        public static readonly NitroxPref<float> ChatVisibilityDuration = new("Nitrox.chatVisibilityDuration", 6f);
+        /// <summary>
+        /// Whether the chat window should automatically open when receiving messages.
+        /// </summary>
+        public static readonly NitroxPref<bool> ChatAutoOpen = new("Nitrox.chatAutoOpen", true);
+        public static readonly NitroxPref<bool> ChatUsed = new("Nitrox.chatUsed");
+        /// <summary>The position of the chosen custom player model in the list of the Options menu (0 is the default body); the id itself is kept by PlayerModelChoice.</summary>
+        public static readonly NitroxPref<int> PlayerModelIndex = new("Nitrox.playerModelIndex");
+        /// <summary>Whether the player sees his own custom model in first person (docs/coop/PLAYER_MODELS.md, "Your own model"): on unless he switches it off in the Options menu.</summary>
+        public static readonly NitroxPref<bool> ShowOwnModel = new("Nitrox.showOwnModel", true);
+        public static readonly NitroxPref<bool> SafeBuilding = new("Nitrox.safeBuilding", true);
+        public static readonly NitroxPref<bool> SafeBuildingLog = new("Nitrox.safeBuildingLog", true);
+        /// <summary>
+        /// In seconds. <see cref="MovementReplicator"/>
+        /// </summary>
+        public static readonly NitroxPref<float> LatencyUpdatePeriod = new("Nitrox.latencyUpdatePeriod", 10);
+        /// <summary>
+        /// In milliseconds. <see cref="MovementReplicator"/>
+        /// </summary>
+        public static readonly NitroxPref<float> SafetyLatencyMargin = new("Nitrox.safetyLatencyMargin", 0.05f);
+        /// <summary>
+        /// In seconds.
+        /// </summary>
+        public static readonly NitroxPref<float> OfflineClockSyncDuration = new("Nitrox.offlineClockSyncDuration", 5);
+    }
+
+    public abstract class NitroxPref { }
+
+    public class NitroxPref<T> : NitroxPref where T : IConvertible
+    {
+        public string Key { get; }
+        public T DefaultValue { get; }
+
+        public NitroxPref(string key, T defaultValue = default)
+        {
+            Key = key;
+            DefaultValue = defaultValue;
+        }
+
+        public T Value
+        {
+            get
+            {
+                switch (DefaultValue)
+                {
+                    case bool defaultBool:
+                        return (T)Convert.ChangeType(PrefsStore.GetInt(Key, defaultBool ? 1 : 0), typeof(T));
+                    case float defaultFloat:
+                        return (T)Convert.ChangeType(PrefsStore.GetFloat(Key, defaultFloat), typeof(T));
+                    case int defaultInt:
+                        return (T)Convert.ChangeType(PrefsStore.GetInt(Key, defaultInt), typeof(T));
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
+            }
+            set
+            {
+                switch (value)
+                {
+                    case bool boolValue:
+                        PrefsStore.SetInt(Key, boolValue ? 1 : 0);
+                        break;
+                    case float floatValue:
+                        PrefsStore.SetFloat(Key, floatValue);
+                        break;
+                    case int intValue:
+                        PrefsStore.SetInt(Key, intValue);
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
+                PrefsStore.Save();
+            }
+        }
+    }
+}

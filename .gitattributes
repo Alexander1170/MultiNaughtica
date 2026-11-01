@@ -1,0 +1,13 @@
+* text=auto
+
+# Unity files
+*.meta -merge=unityamlmerge -text
+*.unity -merge=unityamlmerge -text
+*.asset -merge=unityamlmerge -text
+*.prefab -merge=unityamlmerge -text
+
+# the installer batch files must have CRLF line endings (cmd.exe mishandles labels in LF-only files)
+*.cmd text eol=crlf
+
+# player models ship as binary files
+*.glb binary

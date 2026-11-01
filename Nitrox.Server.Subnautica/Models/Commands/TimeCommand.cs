@@ -1,0 +1,33 @@
+using System.ComponentModel;
+using Nitrox.Model.DataStructures.GameLogic;
+using Nitrox.Server.Subnautica.Models.Commands.Core;
+using Nitrox.Server.Subnautica.Models.GameLogic;
+using Nitrox.Server.Subnautica.Services;
+
+namespace Nitrox.Server.Subnautica.Models.Commands;
+
+[RequiresPermission(Perms.MODERATOR)]
+internal sealed class TimeCommand(TimeService timeService) : ICommandHandler<StoryManager.TimeModification>
+{
+    private readonly TimeService timeService = timeService;
+
+    [Description("Changes the map time")]
+    public async Task Execute(ICommandContext context, [Description("Changes the map time")] StoryManager.TimeModification time)
+    {
+        switch (time)
+        {
+            case StoryManager.TimeModification.DAY:
+                await timeService.ChangeTimeAsync(StoryManager.TimeModification.DAY);
+                await context.SendToAllAsync("Time set to day");
+                break;
+            case StoryManager.TimeModification.NIGHT:
+                await timeService.ChangeTimeAsync(StoryManager.TimeModification.NIGHT);
+                await context.SendToAllAsync("Time set to night");
+                break;
+            default:
+                await timeService.ChangeTimeAsync(StoryManager.TimeModification.SKIP);
+                await context.SendToAllAsync("Skipped time");
+                break;
+        }
+    }
+}

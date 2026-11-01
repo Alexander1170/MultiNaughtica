@@ -1,0 +1,82 @@
+using System.Collections.Generic;
+using Nitrox.Model.DataStructures;
+using Nitrox.Model.Subnautica.DataStructures.GameLogic;
+
+namespace Nitrox.Server.Subnautica.Models.GameLogic.Unlockables;
+
+/// <summary>
+///     Data container for everything Subnautica PDA related. Behavior should go in <see cref="PdaManager" />.
+/// </summary>
+/// <remarks>
+///     Important: Keep <see cref="GetFullCopy" /> in sync with any code changes!
+/// </remarks>
+internal sealed record PdaStateData
+{
+    /// <summary>
+    ///     Gets or sets the KnownTech construct which powers the popup shown to the user when a new TechType is discovered
+    ///     ("New Creature Discovered!")
+    ///     The KnownTech construct uses both <see cref='KnownTechEntryAdd.EntryCategory.KNOWN'>KnownTech.knownTech</see> and
+    ///     <see cref='KnownTechEntryAdd.EntryCategory.ANALYZED'>KnownTech.analyzedTech</see>
+    /// </summary>
+    public List<NitroxTechType> KnownTechTypes { get; } = [];
+
+    public List<NitroxTechType> AnalyzedTechTypes { get; } = [];
+
+    /// <summary>
+    ///     Gets or sets the log of story events present in the PDA
+    /// </summary>
+    public List<PDALogEntry> PdaLog { get; } = [];
+
+    /// <summary>
+    ///     Gets or sets the entries that show up the the PDA's Encyclopedia
+    /// </summary>
+    public List<string> EncyclopediaEntries { get; } = [];
+
+    /// <summary>
+    ///     The text and picture of the time capsule entries of <see cref="EncyclopediaEntries" /> (the content comes from the web service to the player who opened the capsule)
+    /// </summary>
+    public List<TimeCapsuleContentData> TimeCapsuleContents { get; } = [];
+
+    /// <summary>
+    ///     The ids of the already scanned entities.
+    /// </summary>
+    /// <remarks>
+    ///     In Subnautica, this is a Dictionary, but the value is not used, the only important thing is whether a key is stored
+    ///     or not.
+    ///     We can therefore use it as a list.
+    /// </remarks>
+    public HashSet<NitroxId> ScannerFragments { get; } = [];
+
+    /// <summary>
+    ///     Partially unlocked PDA entries (e.g. fragments)
+    /// </summary>
+    public List<PDAEntry> ScannerPartial { get; } = [];
+
+    /// <summary>
+    ///     Fully unlocked PDA entries
+    /// </summary>
+    public HashSet<NitroxTechType> ScannerComplete { get; } = [];
+
+    /// <summary>
+    ///     Gets a full copy of the entire <see cref="PdaStateData" /> which allows for thread safe access.
+    /// </summary>
+    public PdaStateData GetFullCopy()
+    {
+        PdaStateData copy = new();
+        copy.KnownTechTypes.AddRange(KnownTechTypes);
+        copy.AnalyzedTechTypes.AddRange(AnalyzedTechTypes);
+        copy.PdaLog.AddRange(PdaLog);
+        copy.EncyclopediaEntries.AddRange(EncyclopediaEntries);
+        copy.TimeCapsuleContents.AddRange(TimeCapsuleContents);
+        foreach (NitroxId fragment in ScannerFragments)
+        {
+            copy.ScannerFragments.Add(fragment);
+        }
+        copy.ScannerPartial.AddRange(ScannerPartial);
+        foreach (NitroxTechType techType in ScannerComplete)
+        {
+            copy.ScannerComplete.Add(techType);
+        }
+        return copy;
+    }
+}

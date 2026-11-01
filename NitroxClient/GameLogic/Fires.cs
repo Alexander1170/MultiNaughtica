@@ -1,0 +1,227 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Nitrox.Model.Core;
+using Nitrox.Model.DataStructures;
+using Nitrox.Model.Subnautica.DataStructures.GameLogic.Entities;
+using Nitrox.Model.Subnautica.Packets;
+using NitroxClient.Communication;
+using NitroxClient.Communication.Abstract;
+using NitroxClient.MonoBehaviours;
+using UnityEngine;
+
+namespace NitroxClient.GameLogic
+{
+    /// <summary>
+    ///     Handles all of the <see cref="Fire" />s in the game. Currently, the only known Fire spawning is in
+    ///     <see cref="SubFire.CreateFire(SubFire.RoomFire)" />. The
+    ///     fires in the Aurora come loaded with the map and do not grow in size. If we want to create a Fire spawning mechanic
+    ///     outside of Cyclops fires, it should be
+    ///     added to <see cref="Fires.Create(CyclopsFireData)" />. Fire dousing goes by Id and does not need to be
+    ///     modified
+    /// </summary>
+    public class Fires
+    {
+        // Which fires we are currently broadcasting as dousing
+        private readonly HashSet<NitroxId> currentlyDousing = [];
+
+        // Whether Douse() was called on a fire this frame
+        private readonly HashSet<NitroxId> dousedThisFrame = [];
+
+        // The last douse rate per second of a fire
+        private readonly Dictionary<NitroxId, float> localDouseRates = [];
+
+        private readonly LocalPlayer localPlayer;
+
+        private readonly IPacketSender packetSender;
+
+        // How much other players are dousing fires
+        private readonly Dictionary<NitroxId, Dictionary<SessionId, float>> remoteDouseRates = [];
+
+        public Fires(IPacketSender packetSender, LocalPlayer localPlayer)
+        {
+            this.packetSender = packetSender;
+            this.localPlayer = localPlayer;
+        }
+
+        /// <summary>
+        ///     Triggered when <see cref="SubFire.CreateFire(SubFire.RoomFire)" /> is executed. To create a new fire manually,
+        ///     call <see cref="Create(CyclopsFireData)" />
+        /// </summary>
+        public void OnCreate(Fire fire, SubFire.RoomFire room, int nodeIndex)
+        {
+            if (!fire.fireSubRoot.TryGetIdOrWarn(out NitroxId subRootId))
+            {
+                return;
+            }
+
+            GameObject gameObject = fire.transform.parent.gameObject;
+
+            NitroxId fireId = NitroxEntity.GenerateNewId(gameObject);
+            CyclopsFireEntity entity = new(room.roomLinks.room, nodeIndex, fireId, subRootId);
+
+            // No simulation: nobody moves a fire, a lock would only broadcast ownership changes
+            EntitySpawnedByClient packet = new(entity, requireSimulation: false);
+            packetSender.Send(packet);
+        }
+
+        public void OnDouse(Fire fire, float amount)
+        {
+            if (PacketSuppressor<FireDoused>.IsSuppressed)
+            {
+                return;
+            }
+
+            if (!fire.transform.parent.TryGetIdOrWarn(out NitroxId fireId))
+            {
+                return;
+            }
+
+            if (fire.livemixin.health <= 0f || fire.IsExtinguished())
+            {
+                FireDoused packet = new(fireId, fire.livemixin.health, null, 0f, true);
+                packetSender.Send(packet);
+                Unregister(fireId);
+                return;
+            }
+
+            if (amount >= 20f)
+            {
+                // Large values are one-time and not done every frame
+                FireDoused packet = new(fireId, fire.livemixin.health, null, 0f, true);
+                packetSender.Send(packet);
+                return;
+            }
+
+            localDouseRates[fireId] = amount / Time.deltaTime;
+            dousedThisFrame.Add(fireId);
+        }
+
+        public void OnUpdate(Fire fire)
+        {
+            // Not TryGetIdOrWarn: this runs every frame for every fire, also for the ones without an id (it builds a hierarchy path string to warn with)
+            if (!fire.transform.parent.TryGetNitroxId(out NitroxId fireId))
+            {
+                return;
+            }
+
+            // Fires don't track whether are not they are currently being doused.
+            // Instead, the FireExtinguisher just calls Douse() on the fire every
+            // frame, or not at all if the extinguisher is not in use.
+            // We detect this method call by continuously updating dousedThisFrame,
+            // then convert that into a more stable flag in currentlyDoused.
+
+            bool isDousing = dousedThisFrame.Contains(fireId);
+            bool wasDousing = currentlyDousing.Contains(fireId);
+
+            if (isDousing && !wasDousing)
+            {
+                currentlyDousing.Add(fireId);
+                float douseRate = localDouseRates.GetOrDefault(fireId, 20f);
+                FireDoused packet = new(fireId, fire.livemixin.health, localPlayer.SessionId, douseRate, false);
+                packetSender.Send(packet);
+            }
+            else if (!isDousing && wasDousing)
+            {
+                currentlyDousing.Remove(fireId);
+                FireDoused packet = new(fireId, fire.livemixin.health, localPlayer.SessionId, 0f, false);
+                packetSender.Send(packet);
+            }
+
+            if (remoteDouseRates.TryGetValue(fireId, out Dictionary<SessionId, float> rates))
+            {
+                // Smoothly apply damage effect from other players
+                float douseAmount = rates.Values.Sum() * Time.deltaTime;
+                if (douseAmount > 0f)
+                {
+                    if (fire.livemixin.health - douseAmount > 0.1f)
+                    {
+                        using (PacketSuppressor<FireDoused>.Suppress())
+                        {
+                            fire.Douse(douseAmount);
+                        }
+                    }
+                    else
+                    {
+                        // We should be about to receive an extinguish packet. If not,
+                        // something has gone wrong (e.g. player left while dousing),
+                        // so reset everything in case the rates are now invalid
+                        rates.Clear();
+                    }
+                }
+            }
+
+            dousedThisFrame.Remove(fireId);
+        }
+
+        public void Douse(NitroxId fireId, float health, SessionId? sessionId, float douseRate, bool oneShot)
+        {
+            Optional<GameObject> fireGameObject = NitroxEntity.GetObjectFrom(fireId);
+            if (!fireGameObject.HasValue)
+            {
+                Log.Warn($"Can't find fire entity with id {fireId}");
+                return;
+            }
+
+            Fire fire = fireGameObject.Value.GetComponentInChildren<Fire>();
+            if (!fire)
+            {
+                Log.Error($"Fire object with id {fireId} missing component");
+                return;
+            }
+
+            // Prevents a desync where the fire could extinguish for one player but not another:
+            // this way we can never bring the fire to below 0.1 health without an explicit extinguish
+            float newHealth = Math.Max(health, 0.1f);
+            float douseAmount = fire.livemixin.health - newHealth;
+
+            if (douseAmount > 0f)
+            {
+                using (PacketSuppressor<FireDoused>.Suppress())
+                {
+                    fire.Douse(douseAmount);
+                }
+            }
+            else if (!fire.IsExtinguished())
+            {
+                // Fire health went up
+                fire.livemixin.health = health;
+                using (PacketSuppressor<FireDoused>.Suppress())
+                {
+                    fire.Douse(0f);
+                }
+            }
+
+            if (health <= 0f)
+            {
+                fire.Extinguished();
+                Unregister(fireId);
+                return;
+            }
+
+            if (!oneShot && sessionId.HasValue)
+            {
+                remoteDouseRates.TryAdd(fireId, []);
+                remoteDouseRates[fireId][sessionId.Value] = douseRate;
+            }
+        }
+
+        /// <summary>
+        ///     A player who leaves while dousing never sends the rate 0: their rate would stay on the fire, as a ghost, until the fire is out.
+        /// </summary>
+        public void OnPlayerRemoved(SessionId sessionId)
+        {
+            foreach (Dictionary<SessionId, float> rates in remoteDouseRates.Values)
+            {
+                rates.Remove(sessionId);
+            }
+        }
+
+        private void Unregister(NitroxId id)
+        {
+            remoteDouseRates.Remove(id);
+            localDouseRates.Remove(id);
+            currentlyDousing.Remove(id);
+        }
+    }
+}

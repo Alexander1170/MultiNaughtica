@@ -1,0 +1,176 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using Nitrox.Model.Constants;
+using Nitrox.Model.Core;
+using Nitrox.Model.Platforms.OS.Shared;
+using Nitrox.Model.Platforms.Store;
+using Nitrox.Model.Platforms.Store.Interfaces;
+
+namespace Nitrox.Model.Helper;
+
+public static class NitroxUser
+{
+    public const string LAUNCHER_PATH_ENV_KEY = "NITROX_LAUNCHER_PATH";
+    private const string PREFERRED_GAMEPATH_KEY = "PreferredGamePath";
+    private static string gamePath = "";
+
+    private static readonly IEnumerable<Func<string>> launcherPathDataSources = new List<Func<string>>
+    {
+        () => Environment.GetEnvironmentVariable(LAUNCHER_PATH_ENV_KEY),
+        () =>
+        {
+            Assembly currentAsm = Assembly.GetEntryAssembly();
+            if (currentAsm?.GetName().Name?.Equals(NitroxConstants.LAUNCHER_APP_NAME) ?? false)
+            {
+                return Path.GetDirectoryName(currentAsm.Location);
+            }
+
+            Assembly execAsm = Assembly.GetExecutingAssembly();
+            string execDir = string.IsNullOrEmpty(execAsm.Location) ? Directory.GetCurrentDirectory() : execAsm.Location;
+            DirectoryInfo execParentDir = Directory.GetParent(execDir);
+
+            // When running tests LanguageFiles is in same directory
+            if (execParentDir != null && Directory.Exists(Path.Combine(execParentDir.FullName, "LanguageFiles")))
+            {
+                return execParentDir.FullName;
+            }
+
+            // Nitrox.Model and other assemblies are stored in Nitrox.Launcher/lib
+            if (execParentDir?.Parent != null && Directory.Exists(Path.Combine(execParentDir.Parent.FullName, "Resources", "LanguageFiles")))
+            {
+                return execParentDir.Parent.FullName;
+            }
+
+            return null;
+        },
+        () =>
+        {
+            using ProcessEx proc = ProcessEx.GetFirstProcess(NitroxConstants.LAUNCHER_APP_NAME);
+            string executable = proc?.MainModule.FileName;
+            return !string.IsNullOrWhiteSpace(executable) ? Path.GetDirectoryName(executable) : null;
+        }
+    };
+
+    /// <summary>
+    ///     Tries to get the launcher path that was previously saved by other Nitrox code.
+    /// </summary>
+    public static string? LauncherPath
+    {
+        get
+        {
+            if (field != null)
+            {
+                return field;
+            }
+
+            foreach (Func<string> retriever in launcherPathDataSources)
+            {
+                string path = retriever();
+                if (!string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
+                {
+                    return field = path;
+                }
+            }
+
+            return null;
+        }
+    }
+
+    public static string AssetBundlePath => Path.Combine(LauncherPath ?? throw new Exception("Unable to find launcher path"), "Resources", "AssetBundles");
+    public static string LanguageFilesPath => Path.Combine(LauncherPath ?? throw new Exception("Unable to find launcher path"), "Resources", "LanguageFiles");
+
+    public static string PreferredGamePath
+    {
+        get => KeyValueStore.Instance.GetValue<string>(PREFERRED_GAMEPATH_KEY);
+        set => KeyValueStore.Instance.SetValue(PREFERRED_GAMEPATH_KEY, value);
+    }
+
+    public static IGamePlatform? GamePlatform { get; private set; }
+
+    public static string GamePath => string.IsNullOrEmpty(gamePath) ? string.Empty : gamePath;
+
+    public static string ExecutableRootPath
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(field))
+            {
+                return field;
+            }
+            string exePath = ExecutableFilePath;
+            if (exePath == null)
+            {
+                throw new Exception("Executable root path is unavailable");
+            }
+
+            return field = Path.GetDirectoryName(exePath) ?? throw new Exception("Executable root path is unavailable");
+        }
+    }
+
+    public static string? ExecutableFilePath
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(field))
+            {
+                return field;
+            }
+
+            Assembly entryAssembly = Assembly.GetEntryAssembly();
+            if (entryAssembly == null)
+            {
+                return null;
+            }
+            string path = entryAssembly.Location;
+            // File URI works different on Linux/OSX, so only do uri parsing on Windows.
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                path = new Uri(path).LocalPath;
+            }
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                path = Path.Combine(Path.GetDirectoryName(path) ?? throw new InvalidOperationException($"Failed to get directory from path: '{path}'"), Path.GetFileNameWithoutExtension(path));
+            }
+            return field = path;
+        }
+    }
+
+    public static string? AssetsPath
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(field))
+            {
+                return field;
+            }
+
+            string nitroxAssets;
+            if (NitroxEnvironment.IsTesting)
+            {
+                nitroxAssets = Directory.GetCurrentDirectory();
+                while (nitroxAssets != null && Path.GetFileName(nitroxAssets) != "Nitrox.Test")
+                {
+                    nitroxAssets = Directory.GetParent(nitroxAssets)?.FullName;
+                }
+                if (nitroxAssets != null)
+                {
+                    nitroxAssets = Path.Combine(Directory.GetParent(nitroxAssets)?.FullName ?? throw new Exception("Failed to get Nitrox assets during tests"), "Nitrox.Assets.Subnautica");
+                }
+            }
+            else
+            {
+                nitroxAssets = LauncherPath ?? ExecutableRootPath;
+            }
+            return field = nitroxAssets;
+        }
+    }
+
+    public static void SetGamePathAndPlatform(string path, IGamePlatform? platform)
+    {
+        gamePath = Path.GetFullPath(path);
+        GamePlatform = platform ?? GamePlatforms.GetPlatformByGameDir(path);
+    }
+}

@@ -1,0 +1,467 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.IO;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Channels;
+using System.Threading.Tasks;
+using Avalonia.Collections;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Messaging;
+using Nitrox.Launcher.Models.Exceptions;
+using Nitrox.Model.Configuration;
+using Nitrox.Model.Constants;
+using Nitrox.Model.Core;
+using Nitrox.Model.DataStructures.GameLogic;
+using Nitrox.Model.Helper;
+using Nitrox.Model.Logger;
+using Nitrox.Model.Platforms.OS.Shared;
+using Nitrox.Model.Serialization;
+
+namespace Nitrox.Launcher.Models.Design;
+
+/// <summary>
+///     Manager object for a server. Used to start/stop a server and change its settings.
+/// </summary>
+internal sealed partial class ServerEntry : ObservableObject
+{
+    public const string DEFAULT_SERVER_ICON_NAME = "servericon.png";
+
+    private static readonly ConcurrentDictionary<string, ServerEntry> entriesByDirectory = [];
+    private static readonly SubnauticaServerOptions serverDefaults = new();
+
+    [ObservableProperty]
+    public partial bool AllowCommands { get; set; } = !serverDefaults.DisableConsole;
+
+    [ObservableProperty]
+    public partial bool AllowKeepInventory { get; set; } = serverDefaults.KeepInventoryOnDeath;
+
+    [ObservableProperty]
+    public partial bool AllowLanDiscovery { get; set; } = serverDefaults.LanDiscovery;
+
+    [ObservableProperty]
+    public partial bool AllowPvP { get; set; } = serverDefaults.PvpEnabled;
+
+    [ObservableProperty]
+    public partial int AutoSaveInterval { get; set; } = serverDefaults.SaveInterval / 1000;
+
+    public Channel<string> CommandQueue = Channel.CreateUnbounded<string>();
+    private CancellationTokenSource? cts;
+
+    [ObservableProperty]
+    public partial SubnauticaGameMode GameMode { get; set; } = serverDefaults.GameMode;
+
+    /// <summary>
+    ///     Should not be set to persist <see cref="IsEmbedded"/> change. Use <see cref="IKeyValueStore" /> instead.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool IsEmbedded { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsNewServer { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool IsOnline { get; set; }
+
+    public bool IsLoading => LoadingStage != null && LoadingProgress < 1.0f;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLoading))]
+    public partial string? LoadingStage { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLoading))]
+    public partial float LoadingProgress { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsServerClosing { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsServerStarting { get; set; }
+
+    [ObservableProperty]
+    public partial DateTime LastAccessedTime { get; set; } = DateTime.Now;
+
+    private int lastProcessId;
+
+    [ObservableProperty]
+    public partial int MaxPlayers { get; set; } = serverDefaults.MaxConnections;
+
+    [ObservableProperty]
+    public required partial string Name { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string? Password { get; set; }
+
+    [ObservableProperty]
+    public partial Perms PlayerPermissions { get; set; } = serverDefaults.DefaultPlayerPerm;
+
+    [ObservableProperty]
+    public partial int PlayerCount { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PlayerNamesTooltip))]
+    public partial List<string> PlayerNames { get; set; } = [];
+
+    [ObservableProperty]
+    public partial int Port { get; set; } = serverDefaults.ServerPort;
+
+    [ObservableProperty]
+    public partial bool PortForward { get; set; } = serverDefaults.PortForward;
+
+    [ObservableProperty]
+    public partial string? Seed { get; set; }
+
+    [ObservableProperty]
+    public partial Bitmap? ServerIcon { get; set; }
+
+    [ObservableProperty]
+    public partial Version Version { get; set; } = NitroxEnvironment.Version;
+
+    internal ServerProcess? Process { get; private set; }
+    public AvaloniaList<OutputLine> Output { get; } = [];
+    public string? PlayerNamesTooltip => PlayerNames.Count == 0 ? null : string.Join(Environment.NewLine, PlayerNames);
+
+    /// <summary>
+    ///     Gets the last process id known by this server entry.
+    /// </summary>
+    public int LastProcessId
+    {
+        get => ProcessId <= 0 ? lastProcessId : lastProcessId = ProcessId;
+    }
+
+    public int ProcessId
+    {
+        get
+        {
+            int processId = Process?.Id ?? -1;
+            if (processId > 0)
+            {
+                lastProcessId = processId;
+            }
+            return processId;
+        }
+    }
+
+    /// <summary>
+    ///     Should not be used directly unless for tests.
+    /// </summary>
+    internal ServerEntry()
+    {
+    }
+
+    public static async Task<ServerEntry?> FromDirectoryAsync(string saveDir)
+    {
+        ServerEntry entry = entriesByDirectory.GetOrAdd(saveDir, static (_, saveDir) => new()
+        {
+            Name = Path.GetFileName(saveDir)
+        }, saveDir);
+        await entry.RefreshFromDirectoryAsync(saveDir);
+        return entry;
+    }
+
+    public static async Task<ServerEntry?> CreateNew(string saveDir, SubnauticaGameMode saveGameMode)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(saveDir);
+
+        Directory.CreateDirectory(saveDir);
+
+        SubnauticaServerOptions config = NitroxConfig.Load<SubnauticaServerOptions>(saveDir);
+
+        await File.WriteAllTextAsync(Path.Combine(saveDir, $"Version{NitroxConstants.SAVE_FILE_ENDING}"), (string?)null);
+        config.GameMode = saveGameMode;
+        NitroxConfig.CreateFile(saveDir, config);
+
+        return await FromDirectoryAsync(saveDir);
+    }
+
+    public async Task<bool> RefreshFromProcessAsync(int processId)
+    {
+        if (string.IsNullOrWhiteSpace(Name))
+        {
+            return false;
+        }
+        if (Process?.Id != processId)
+        {
+            await ResetCtsAsync();
+            Process = ServerProcess.Start(Path.Combine(KeyValueStore.Instance.GetSavesPath(), Name), cts, ShouldAttachAsEmbedded(), processId);
+        }
+        if (Process is { IsRunning: true })
+        {
+            IsOnline = true;
+        }
+        return true;
+
+        static bool ShouldAttachAsEmbedded()
+        {
+            // On Windows, we expect external servers to always have a command window open. Otherwise, they would have been started through the launcher as embedded.
+            // On Unix, command windows won't be visible. In this case, we default to "embedded" so we can manage the server via grpc.
+            return !OperatingSystem.IsWindows();
+        }
+    }
+
+    public async Task<bool> RefreshFromDirectoryAsync(string saveDir)
+    {
+        if (!File.Exists(Path.Combine(saveDir, SerializableFileNameAttribute.GetFileName<SubnauticaServerOptions>())))
+        {
+            Log.Warn($"Tried loading invalid save directory at '{saveDir}'");
+            return false;
+        }
+
+        Bitmap? icon = null;
+        string serverIconPath = Path.Combine(saveDir, DEFAULT_SERVER_ICON_NAME);
+        if (File.Exists(serverIconPath))
+        {
+            icon = new Bitmap(Path.Combine(saveDir, DEFAULT_SERVER_ICON_NAME));
+        }
+
+        SubnauticaServerOptions config = NitroxConfig.Load<SubnauticaServerOptions>(saveDir);
+
+        string saveFileVersion = Path.Combine(saveDir, $"Version{NitroxConstants.SAVE_FILE_ENDING}");
+        if (!File.Exists(saveFileVersion))
+        {
+            Log.Warn($"Tried loading invalid save directory at '{saveDir}', Version file is missing");
+            return false;
+        }
+
+        Version serverVersion;
+        await using (FileStream stream = new(saveFileVersion, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            SaveFileVersion versionModel;
+            try
+            {
+                versionModel = JsonSerializer.Deserialize<SaveFileVersion>(stream);
+            }
+            catch (Exception)
+            {
+                versionModel = new SaveFileVersion(NitroxEnvironment.Version);
+            }
+            serverVersion = versionModel.Version;
+        }
+
+        string prevName = Name;
+        Name = Path.GetFileName(saveDir);
+        if (prevName != Name)
+        {
+            await ResetCtsAsync();
+        }
+        ServerIcon = icon;
+        Password = config.ServerPassword;
+        Seed = config.Seed;
+        GameMode = config.GameMode;
+        PlayerPermissions = config.DefaultPlayerPerm;
+        AutoSaveInterval = config.SaveInterval / 1000;
+        MaxPlayers = config.MaxConnections;
+        Port = config.ServerPort;
+        PortForward = config.PortForward;
+        AllowLanDiscovery = config.LanDiscovery;
+        AllowCommands = !config.DisableConsole;
+        AllowPvP = config.PvpEnabled;
+        AllowKeepInventory = config.KeepInventoryOnDeath;
+        IsNewServer = !File.Exists(Path.Combine(saveDir, $"PlayerData{NitroxConstants.SAVE_FILE_ENDING}"));
+        Version = serverVersion;
+        LastAccessedTime = File.GetLastWriteTime(File.Exists(Path.Combine(saveDir, $"PlayerData{NitroxConstants.SAVE_FILE_ENDING}"))
+                                                     ?
+                                                     // This file is affected by server saving
+                                                     Path.Combine(saveDir, $"PlayerData{NitroxConstants.SAVE_FILE_ENDING}")
+                                                     :
+                                                     // If the above file doesn't exist (server was never ran), use the Version file instead
+                                                     Path.Combine(saveDir, $"Version{NitroxConstants.SAVE_FILE_ENDING}"));
+        return true;
+    }
+
+    public async Task StartAsync(string savesDir, bool embedded, int existingProcessId = -1)
+    {
+        if (string.IsNullOrWhiteSpace(Name))
+        {
+            throw new Exception($"Server {nameof(Name)} not set");
+        }
+        if (!Directory.Exists(savesDir))
+        {
+            throw new DirectoryNotFoundException($"Directory '{savesDir}' not found");
+        }
+        if (Process?.IsRunning ?? false)
+        {
+            throw new DuplicateSingularApplicationException("Nitrox Server");
+        }
+
+        // Start server and add notify when server closed.
+        await ResetCtsAsync();
+        IsEmbedded = embedded;
+        Process = ServerProcess.Start(Path.Combine(savesDir, Name), cts, embedded, existingProcessId);
+
+        Output.Clear();
+        IsServerStarting = true;
+        IsNewServer = false;
+        // Set loading state BEFORE IsOnline to ensure UI shows loading first
+        LoadingStage = "Starting...";
+        LoadingProgress = 0f;
+        IsOnline = true;
+    }
+
+    [RelayCommand(AllowConcurrentExecutions = false)]
+    public async Task StopAsync()
+    {
+        if (cts != null)
+        {
+            await cts.CancelAsync();
+        }
+        // Ensure the server is dead before continuing. On Linux, if launcher process closes it could otherwise abruptly kill the embedded servers.
+        using CancellationTokenSource waitProcessExitCts = new(TimeSpan.FromSeconds(20));
+        try
+        {
+            while (ProcessEx.ProcessExists(GetServerProcessName(), ex => ex.Id == LastProcessId))
+            {
+                await Task.Delay(200, waitProcessExitCts.Token);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // ignored
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanOpenSaveFolder))]
+    public void OpenSaveFolder()
+    {
+        OpenPath(Path.Combine(KeyValueStore.Instance.GetSavesPath(), Name));
+    }
+
+    protected override void OnPropertyChanged(PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(IsOnline) when LastProcessId > 0:
+                WeakReferenceMessenger.Default.Send(new ServerStatusMessage(LastProcessId, IsOnline, PlayerCount, IsLoading));
+                break;
+            case nameof(IsLoading) when LastProcessId > 0:
+                WeakReferenceMessenger.Default.Send(new ServerStatusMessage(LastProcessId, IsOnline, PlayerCount, IsLoading));
+                break;
+        }
+        base.OnPropertyChanged(e);
+    }
+
+    [MemberNotNull(nameof(cts))]
+    internal async Task ResetCtsAsync(bool cancelPreexisting = false)
+    {
+        if (cancelPreexisting && cts is {} c)
+        {
+            await c.CancelAsync();
+        }
+        cts?.Dispose();
+        cts = new CancellationTokenSource();
+        cts.Token.Register(async void () =>
+        {
+            try
+            {
+                await Dispatcher.UIThread.InvokeAsync(() => IsServerClosing = true);
+                await Dispatcher.UIThread.InvokeAsync(async () =>
+                {
+                    while (ProcessEx.ProcessExists(GetServerProcessName(), ex => ex.Id == LastProcessId))
+                    {
+                        try
+                        {
+                            await CommandQueue.Writer.WriteAsync("quit");
+                            CommandQueue.Writer.TryComplete();
+                        }
+                        catch (ChannelClosedException)
+                        {
+                            await Task.Delay(500);
+                        }
+                    }
+                    CommandQueue = Channel.CreateUnbounded<string>();
+                    PlayerCount = 0;
+                    PlayerNames = [];
+                    IsOnline = false;
+                    LoadingStage = null;
+                    Output.Clear();
+                });
+                await Dispatcher.UIThread.InvokeAsync(() => IsServerClosing = false);
+            }
+            catch (Exception e)
+            {
+                Log.Error(e);
+            }
+        });
+    }
+
+    private bool CanOpenSaveFolder() => !string.IsNullOrWhiteSpace(Name);
+
+    internal class ServerProcess : IDisposable
+    {
+        private ProcessEx? serverProcess;
+        public int Id => serverProcess?.Id ?? -1;
+        public bool IsRunning => serverProcess is { IsRunning: true };
+
+        private ServerProcess(string saveDir, CancellationTokenSource cts, bool isEmbeddedMode = false, int processId = -1)
+        {
+            cts.Token.Register(Dispose);
+            if (processId <= 0)
+            {
+                string saveName = Path.GetFileName(saveDir);
+                string launcherPath = NitroxUser.ExecutableRootPath;
+                if (string.IsNullOrWhiteSpace(launcherPath))
+                {
+                    throw new Exception($"{nameof(launcherPath)} must be set");
+                }
+
+                string serverFile = Path.Combine(launcherPath, GetServerFileName());
+                ProcessStartInfo startInfo = new(serverFile)
+                {
+                    WorkingDirectory = launcherPath,
+                    ArgumentList =
+                    {
+                        "--save",
+                        saveName,
+                        "--game-path",
+                        NitroxUser.GamePath
+                    },
+                    WindowStyle = isEmbeddedMode ? ProcessWindowStyle.Hidden : ProcessWindowStyle.Normal,
+                    CreateNoWindow = isEmbeddedMode
+                };
+                // On Steam Deck, start through user-wide .dotnet. The default is system-wide which might not work.
+                if (IsSteamOs())
+                {
+                    string dotnetExecutable = Path.Combine(NitroxDirectory.HomePath, ".dotnet", "dotnet");
+                    if (!File.Exists(dotnetExecutable))
+                    {
+                        throw new FileNotFoundException("A compatible .NET version must be installed by the user to run the server on SteamOS. Please install dotnet to your user home: ~/.dotnet/");
+                    }
+                    startInfo.FileName = dotnetExecutable;
+                    startInfo.ArgumentList.Insert(0, $"{serverFile}.dll");
+                }
+                // Assist server with finding launcher location.
+                if (Directory.Exists(launcherPath))
+                {
+                    startInfo.EnvironmentVariables[NitroxUser.LAUNCHER_PATH_ENV_KEY] = launcherPath;
+                }
+                if (isEmbeddedMode)
+                {
+                    startInfo.ArgumentList.Add("--embedded");
+                }
+                Log.Info($"Starting server:{Environment.NewLine}File: {startInfo.FileName}{Environment.NewLine}Working directory: {startInfo.WorkingDirectory}{Environment.NewLine}Arguments: {string.Join(", ", startInfo.ArgumentList)}");
+
+                serverProcess = ProcessEx.From(startInfo);
+            }
+            else
+            {
+                serverProcess = ProcessEx.From(System.Diagnostics.Process.GetProcessById(processId));
+            }
+        }
+
+        public static ServerProcess Start(string saveDir, CancellationTokenSource cts, bool isEmbedded, int processId) => new(saveDir, cts, isEmbedded, processId);
+
+        public void Dispose()
+        {
+            serverProcess?.Dispose();
+            serverProcess = null;
+        }
+    }
+}

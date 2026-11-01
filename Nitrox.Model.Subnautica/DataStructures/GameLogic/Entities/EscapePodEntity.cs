@@ -1,0 +1,48 @@
+using System;
+using System.Collections.Generic;
+using System.Runtime.Serialization;
+using BinaryPack.Attributes;
+using Nitrox.Model.Core;
+using Nitrox.Model.DataStructures;
+using Nitrox.Model.DataStructures.Unity;
+using Nitrox.Model.Subnautica.DataStructures.GameLogic.Entities.Metadata;
+
+namespace Nitrox.Model.Subnautica.DataStructures.GameLogic.Entities;
+
+[Serializable]
+[DataContract]
+public class EscapePodEntity : GlobalRootEntity
+{
+    [DataMember(Order = 1)]
+    public List<PeerId> Players { get; set; } = [];
+
+    [IgnoreConstructor]
+    protected EscapePodEntity()
+    {
+        // Constructor for serialization. Has to be "protected" for json serialization.
+    }
+
+    public EscapePodEntity(NitroxVector3 position, NitroxId id, EntityMetadata metadata)
+    {
+        Transform = new NitroxTransform(position, NitroxQuaternion.Identity, NitroxVector3.One);
+        Id = id;
+        Metadata = metadata;
+        Players = [];
+        Level = 0;
+        TechType = new NitroxTechType("EscapePod");
+        SpawnedByServer = true;
+        ChildEntities = [];
+    }
+
+    /// <remarks>Used for deserialization</remarks>
+    public EscapePodEntity(List<PeerId> players, NitroxTransform transform, int level, string classId, bool spawnedByServer, NitroxId id, NitroxTechType techType, EntityMetadata metadata, NitroxId parentId, List<Entity> childEntities) :
+        base(transform, level, classId, spawnedByServer, id, techType, metadata, parentId, childEntities)
+    {
+        Players = players;
+    }
+
+    public override string ToString()
+    {
+        return $"[EscapePodEntity Players: [{string.Join(", ", Players)}] {base.ToString()}]";
+    }
+}

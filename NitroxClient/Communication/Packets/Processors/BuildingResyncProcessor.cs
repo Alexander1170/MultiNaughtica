@@ -1,0 +1,196 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using Nitrox.Model.DataStructures;
+using Nitrox.Model.Subnautica.DataStructures.GameLogic;
+using Nitrox.Model.Subnautica.DataStructures.GameLogic.Entities;
+using Nitrox.Model.Subnautica.DataStructures.GameLogic.Entities.Bases;
+using Nitrox.Model.Subnautica.Packets;
+using NitroxClient.Communication.Packets.Processors.Core;
+using NitroxClient.GameLogic;
+using NitroxClient.GameLogic.Bases;
+using NitroxClient.GameLogic.Spawning.Bases;
+using NitroxClient.GameLogic.Spawning.Metadata;
+using NitroxClient.MonoBehaviours;
+using NitroxClient.Unity.Helper;
+using UnityEngine;
+
+namespace NitroxClient.Communication.Packets.Processors;
+
+internal sealed class BuildingResyncProcessor(Entities entities, EntityMetadataManager entityMetadataManager) : IClientPacketProcessor<BuildingResync>
+{
+    private readonly Entities entities = entities;
+    private readonly EntityMetadataManager entityMetadataManager = entityMetadataManager;
+
+    public Task Process(ClientProcessorContext context, BuildingResync packet)
+    {
+        if (!BuildingHandler.Main)
+        {
+            return Task.CompletedTask;
+        }
+
+        BuildingHandler.Main.StartCoroutine(ResyncBuildingEntities(packet.BuildEntities, packet.ModuleEntities));
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    ///     Destroys manually ghosts, modules, interior pieces and vehicles of a base
+    /// </summary>
+    /// <remarks>
+    ///     This is the destructive way of clearing the base, if the base isn't modified consequently, IBaseModuleGeometry
+    ///     under the base cells may start spamming errors.
+    /// </remarks>
+    private static void ClearBaseChildren(Base @base)
+    {
+        for (int i = @base.transform.childCount - 1; i >= 0; i--)
+        {
+            Transform child = @base.transform.GetChild(i);
+            if (child.GetComponent<IBaseModule>().AliveOrNull() || child.GetComponent<Constructable>() ||
+                child.GetComponent<PlaceTool>())
+            {
+                UnityEngine.Object.Destroy(child.gameObject);
+            }
+        }
+        foreach (VehicleDockingBay vehicleDockingBay in @base.GetComponentsInChildren<VehicleDockingBay>(true))
+        {
+            if (vehicleDockingBay.dockedVehicle)
+            {
+                UnityEngine.Object.Destroy(vehicleDockingBay.dockedVehicle.gameObject);
+                vehicleDockingBay.SetVehicleUndocked();
+            }
+        }
+    }
+
+    private IEnumerator ResyncBuildingEntities(Dictionary<BuildEntity, int> buildEntities, Dictionary<ModuleEntity, int> moduleEntities)
+    {
+        Stopwatch stopwatch = Stopwatch.StartNew();
+        BuildingHandler.Main.StartResync(buildEntities);
+        yield return UpdateEntities<Base, BuildEntity>(buildEntities.Keys.ToList(), OverwriteBase, IsInCloseProximity).OnYieldError(exception => Log.Error(exception, "Encountered an exception while resyncing BuildEntities"));
+
+        BuildingHandler.Main.StartResync(moduleEntities);
+        yield return UpdateEntities<Constructable, ModuleEntity>(moduleEntities.Keys.ToList(), OverwriteModule, IsInCloseProximity).OnYieldError(exception => Log.Error(exception, "Encountered an exception while resyncing ModuleEntities"));
+        BuildingHandler.Main.StopResync();
+
+        stopwatch.Stop();
+
+        int totalEntities = buildEntities.Count + moduleEntities.Count;
+        Log.InGame(Language.main.Get("Nitrox_FinishedResyncRequest").Replace("{TIME}", stopwatch.ElapsedMilliseconds.ToString()).Replace("{COUNT}", totalEntities.ToString()));
+    }
+
+    private bool IsInCloseProximity<C>(WorldEntity entity, C componentInWorld) where C : Component
+    {
+        return Vector3.Distance(entity.Transform.Position.ToUnity(), componentInWorld.transform.position) < 0.001f;
+    }
+
+    /// <summary>
+    ///     Tries to overwrite components of the provided type found in GlobalRoot's hierarchy by the provided list of entities
+    ///     to update.
+    ///     If no component is found to be corresponding to a provided entity, the entity will be spawned independently.
+    ///     Other components of the provided type which weren't updated shall be destroyed.
+    /// </summary>
+    /// <remarks>
+    ///     The provided list is modified by the function. Make sure it's not used somewhere else.
+    /// </remarks>
+    /// <typeparam name="C">The Unity component to be looked for</typeparam>
+    /// <typeparam name="E">The GlobalRootEntity type which will be updated</typeparam>
+    /// <param name="overwrite">A function to overwrite a given component by a given entity</param>
+    /// <param name="correspondingPredicate">
+    ///     Predicate to determine if an entity can overwrite the GameObject of the provided component.
+    /// </param>
+    private IEnumerator UpdateEntities<C, E>(List<E> entitiesToUpdate, Func<C, E, IEnumerator> overwrite, Func<E, C, bool> correspondingPredicate) where C : Component where E : GlobalRootEntity
+    {
+        List<C> unmarkedComponents = new();
+        Dictionary<NitroxId, E> entitiesToUpdateById = entitiesToUpdate.ToDictionary(e => e.Id);
+
+        foreach (Transform childTransform in LargeWorldStreamer.main.globalRoot.transform)
+        {
+            if (childTransform.TryGetComponent(out C component))
+            {
+                if (component.TryGetNitroxId(out NitroxId id) && entitiesToUpdateById.TryGetValue(id, out E correspondingEntity))
+                {
+                    yield return overwrite(component, correspondingEntity).OnYieldError(Log.Error);
+                    entitiesToUpdate.Remove(correspondingEntity);
+                    continue;
+                }
+                unmarkedComponents.Add(component);
+            }
+        }
+
+        // Entities without a corresponding component (a base or module this client lost) stay in the list and are spawned below
+        foreach ((E entity, C associatedComponent) in PairWithComponents(entitiesToUpdate, unmarkedComponents, correspondingPredicate))
+        {
+            yield return overwrite(associatedComponent, entity).OnYieldError(Log.Error);
+            entitiesToUpdate.Remove(entity);
+        }
+
+        for (int i = unmarkedComponents.Count - 1; i >= 0; i--)
+        {
+            Log.Info($"[{typeof(E)} RESYNC] Destroyed GameObject {unmarkedComponents[i].gameObject}");
+            GameObject.Destroy(unmarkedComponents[i].gameObject);
+        }
+        foreach (E entity in entitiesToUpdate)
+        {
+            Log.Info($"[{typeof(E)} RESYNC] spawning entity {entity.Id}");
+            yield return entities.SpawnEntityAsync(entity).OnYieldError(Log.Error);
+        }
+    }
+
+    /// <summary>
+    ///     Pairs each entity with the first still unmarked component it corresponds to. The paired components are removed from
+    ///     <paramref name="unmarkedComponents" />. Entities which have no corresponding component are not part of the result
+    ///     (the caller spawns them); they must never be paired with <c>null</c>.
+    /// </summary>
+    internal static List<(E Entity, C Component)> PairWithComponents<E, C>(IReadOnlyList<E> entitiesToUpdate, List<C> unmarkedComponents, Func<E, C, bool> correspondingPredicate) where C : class
+    {
+        List<(E Entity, C Component)> pairs = [];
+        for (int i = entitiesToUpdate.Count - 1; i >= 0; i--)
+        {
+            E entity = entitiesToUpdate[i];
+            C associatedComponent = unmarkedComponents.Find(c => correspondingPredicate(entity, c));
+            if (associatedComponent == null)
+            {
+                continue;
+            }
+            unmarkedComponents.Remove(associatedComponent);
+            pairs.Add((entity, associatedComponent));
+        }
+        return pairs;
+    }
+
+    private IEnumerator OverwriteBase(Base @base, BuildEntity buildEntity)
+    {
+        Log.Info($"[Base RESYNC] Overwriting base with id {buildEntity.Id}");
+        ClearBaseChildren(@base);
+        // Frame to let all children be deleted properly
+        yield return Yielders.WaitForEndOfFrame;
+
+        yield return BuildEntitySpawner.SetupBase(buildEntity, @base, entities);
+        // The rebuilt base has dry rooms again: the water that the holder of the base sent for it is put back (a grid of another size is ignored by the processor)
+        entityMetadataManager.ApplyMetadata(@base.gameObject, buildEntity.Metadata);
+        yield return MoonpoolManager.RestoreMoonpools(buildEntity.ChildEntities.OfType<MoonpoolEntity>(), @base);
+        yield return entities.SpawnBatchAsync(buildEntity.ChildEntities.OfType<PlayerEntity>().ToList<Entity>(), false, false);
+
+        foreach (Entity childEntity in buildEntity.ChildEntities)
+        {
+            switch (childEntity)
+            {
+                case MapRoomEntity mapRoomEntity:
+                    yield return InteriorPieceEntitySpawner.RestoreMapRoom(@base, mapRoomEntity, entities, entityMetadataManager);
+                    break;
+                case BaseLeakEntity baseLeakEntity:
+                    yield return entities.SpawnEntityAsync(baseLeakEntity, true);
+                    break;
+            }
+        }
+    }
+
+    private IEnumerator OverwriteModule(Constructable constructable, ModuleEntity moduleEntity)
+    {
+        Log.Info($"[Module RESYNC] Overwriting module with id {moduleEntity.Id}");
+        ModuleEntitySpawner.ApplyModuleData(moduleEntity, constructable.gameObject);
+        entityMetadataManager.ApplyMetadata(constructable.gameObject, moduleEntity.Metadata);
+        yield break;
+    }
+}
