@@ -23,7 +23,7 @@ This build ships **no** player models. If you want the other players to see you 
 ### What you need
 
 - Windows 10 or 11, 64 bit, Subnautica (the first game, updated; build 83031 was used for testing, Nitrox refuses a build older than 82304).
-- Run `Install.cmd` yourself first (the steps above): it installs the two Microsoft runtimes (.NET Runtime 10 and ASP.NET Core Runtime 10, x64) if they are missing and sets everything up. If you prefer to do it by hand: `winget install Microsoft.DotNet.Runtime.10` and `winget install Microsoft.DotNet.AspNetCore.10`, unzip into a normal folder (not `Program Files`, not the Subnautica folder) and start `Nitrox.Launcher.exe`. Do not run the launcher of stock Nitrox at the same time: both have the same program name and patch the same game folder.
+- Run `Install.cmd` yourself first (the steps above): it installs the two Microsoft runtimes (.NET Runtime 10 and ASP.NET Core Runtime 10, x64) if they are missing or too old and sets everything up. If you prefer to do it by hand: `winget install Microsoft.DotNet.Runtime.10` and `winget install Microsoft.DotNet.AspNetCore.10`, unzip into a normal folder (not `Program Files`, not the Subnautica folder) and start `Nitrox.Launcher.exe`. Do not run the launcher of stock Nitrox at the same time: both have the same program name and patch the same game folder.
 - Give the friend **the same zip**, and tell them your server address (below).
 
 ### 1. Make a new world with this build
@@ -59,7 +59,7 @@ The first start of an existing world with this build repairs it once (duplicate 
 ## When something goes wrong
 
 - **The installer stops with a sentence**: the sentence says what to do (close the program, unzip the whole zip first, ...). The full log is `%TEMP%\MultiNaughtica-install.log`.
-- **"You must install .NET to run this application"** when the launcher starts: the two runtimes are missing; run `Install.cmd` again (it installs them) or see the host section.
+- **"You must install or update .NET to run this application"** when the launcher starts: a runtime is missing or too old; run `Install.cmd` again (it installs or updates them) or see the host section.
 - **"Unable to contact the remote server"**: the server is not running, the address is wrong, or UDP 11000 is blocked (Windows Firewall on the host, the router, or Tailscale not connected on one side). Try from the host's own PC first with `127.0.0.1`.
 - **"The server refused the connection ... another build"**: the zips differ.
 - **A name is reserved** after a crash for 30 seconds: wait and join again.

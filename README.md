@@ -31,13 +31,13 @@ On top of Nitrox's multiplayer, this fork has (see `docs/coop` for the details o
 
 - **Windows 10 or 11, 64 bit.**
 - **Your own copy of Subnautica** (the first game, on Steam). Nothing from the game is included in this mod.
-- **The .NET 10 runtime and the ASP.NET Core 10 runtime** (x64). The installer installs them for you if they are missing.
+- **The .NET 10 runtime and the ASP.NET Core 10 runtime** (x64). The installer installs them for you if they are missing or too old.
 - Everybody who plays together must use **the same zip**. The game refuses a server of another build and tells you so.
 
 ## Install
 
 1. Download the zip from the Releases page and unzip it anywhere (not into the Subnautica folder, not into `Program Files`).
-2. Double-click **`Install.cmd`**. It installs the two runtimes if they are missing, finds Subnautica, sets everything up and asks for the server address your host gave you (Enter skips that).
+2. Double-click **`Install.cmd`**. If Windows says "Windows protected your PC", click **More info**, then **Run anyway**. It installs the two runtimes if they are missing or too old, finds Subnautica, sets everything up and asks for the server address your host gave you (Enter skips that).
 3. Start **MultiNaughtica** from your desktop and press **PLAY MULTIPLAYER**. In the game choose **Multiplayer**, pick the server and join.
 
 `docs/coop/INSTALL.md` (also in the zip) has the details for players and for the host, and what to do when something goes wrong. To remove it, use **Uninstall MultiNaughtica** from the Start menu; your worlds are kept.

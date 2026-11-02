@@ -4,7 +4,7 @@
 
 .DESCRIPTION
     What it does, in order (each step says what it is doing in plain words):
-      1. Looks for the two free Microsoft runtimes the program needs (.NET Runtime 10 and ASP.NET Core Runtime 10, 64 bit) and installs whichever is missing:
+      1. Looks for the two free Microsoft runtimes the program needs (.NET Runtime 10 and ASP.NET Core Runtime 10, 64 bit) and installs whichever is missing or too old:
          winget first, else the official installer from Microsoft's own download address (checked against the checksum Microsoft publishes).
       2. Copies the program into %LOCALAPPDATA%\MultiNaughtica (or the folder you pick), removes the "downloaded from the internet" mark from the files and makes a desktop and a Start menu
          shortcut. Running it again updates in place; the worlds and settings (in %APPDATA%\Nitrox) are never touched; a different MultiNaughtica build is only replaced after asking.
@@ -125,9 +125,33 @@ function Test-Runtime([string]$sharedName) {
         if (-not (Test-Path -LiteralPath $folder)) { continue }
         $found = Get-ChildItem -LiteralPath $folder -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^10\.\d+\.\d+' }
         # newest by version number (as text 10.0.5 would come after 10.0.13)
-        if ($found) { return ($found | Sort-Object { [version]($_.Name -replace '-.*$', '') } | Select-Object -Last 1).Name }
+        if ($found) { return ($found | Sort-Object { ConvertTo-Version $_.Name } | Select-Object -Last 1).Name }
     }
     return $null
+}
+
+function ConvertTo-Version([string]$text) {
+    return [version]($text -replace '-.*$', '')
+}
+
+function Test-RuntimeEnough([string]$sharedName, [string]$minimum) {
+    $have = Test-Runtime $sharedName
+    if (-not $have) { return $false }
+    return (-not $minimum) -or ((ConvertTo-Version $have) -ge (ConvertTo-Version $minimum))
+}
+
+function Get-NetVersionForAspNet([string]$aspnetVersion) {
+    # ASP.NET Core 10.0.N only runs on .NET 10.0.N or newer, and the program takes the newest ASP.NET Core it finds; its own settings file says which .NET it needs
+    foreach ($root in (Get-DotnetRoots)) {
+        $file = Join-Path $root "shared\Microsoft.AspNetCore.App\$aspnetVersion\Microsoft.AspNetCore.App.runtimeconfig.json"
+        if (-not (Test-Path -LiteralPath $file)) { continue }
+        try {
+            $need = [string](Get-Content -LiteralPath $file -Raw | ConvertFrom-Json).runtimeOptions.framework.version
+            if ($need) { return $need }
+        }
+        catch { Write-Log "could not read ${file}: $($_.Exception.Message)" }
+    }
+    return $aspnetVersion   # Microsoft releases the two with the same number
 }
 
 function Install-RuntimeWithWinget([string]$packageId) {
@@ -143,6 +167,8 @@ function Install-RuntimeWithWinget([string]$packageId) {
 
 function Get-OfficialRuntimeInstaller([string]$kind) {
     # Microsoft publishes the file names, download addresses and SHA512 checksums of every release at this address (their own download host, nowhere else is used)
+    # (this PowerShell can default to TLS versions that the host refuses on Windows 10)
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     $metadata = Invoke-RestMethod -Uri 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json' -TimeoutSec 60
     $release = $metadata.releases | Select-Object -First 1
     $section = if ($kind -eq 'aspnet') { $release.'aspnetcore-runtime' } else { $release.runtime }
@@ -175,19 +201,24 @@ function Install-RuntimeFromMicrosoft([string]$kind, [string]$label) {
     if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 3010) { throw "The $label installer ended with code $($process.ExitCode)." }
 }
 
-function Ensure-Runtime([string]$sharedName, [string]$label, [string]$wingetId, [string]$kind) {
+function Ensure-Runtime([string]$sharedName, [string]$label, [string]$wingetId, [string]$kind, [string]$minimum = '') {
+    # $minimum: the oldest version that will do ('' = any 10.x)
     $have = Test-Runtime $sharedName
-    if ($have) { Say "  $label $have is installed." 'Green'; return }
-    Say "  $label 10 is missing." 'Yellow'
+    if (Test-RuntimeEnough $sharedName $minimum) {
+        if (-not $minimum) { Say "  $label $have is installed." 'Green' }
+        return
+    }
+    if ($have) { Say "  $label $have is too old: the program needs $minimum or newer." 'Yellow' }
+    else { Say "  $label 10 is missing." 'Yellow' }
     if ($script:Simulate -or $TestRoot) {
         Say-Dry "install $label 10 (winget id $wingetId, else the official installer from Microsoft)"
         return
     }
     $ok = Install-RuntimeWithWinget $wingetId
-    if ($ok -and (Test-Runtime $sharedName)) { Say "  $label installed." 'Green'; return }
+    if ($ok -and (Test-RuntimeEnough $sharedName $minimum)) { Say "  $label installed." 'Green'; return }
     if (-not $ok) { Say '  winget is not available or did not finish; using the official installer from Microsoft instead.' }
     Install-RuntimeFromMicrosoft $kind $label
-    if (-not (Test-Runtime $sharedName)) { throw "$label 10 is still not found after installing it. Restart the PC and run Install.cmd again." }
+    if (-not (Test-RuntimeEnough $sharedName $minimum)) { throw "$label 10 is still missing or too old after installing it. Restart the PC and run Install.cmd again." }
     Say "  $label installed." 'Green'
 }
 
@@ -392,6 +423,8 @@ try {
     else {
         Ensure-Runtime 'Microsoft.NETCore.App' '.NET Runtime' 'Microsoft.DotNet.Runtime.10' 'runtime'
         Ensure-Runtime 'Microsoft.AspNetCore.App' 'ASP.NET Core Runtime' 'Microsoft.DotNet.AspNetCore.10' 'aspnet'
+        $aspnet = Test-Runtime 'Microsoft.AspNetCore.App'
+        if ($aspnet) { Ensure-Runtime 'Microsoft.NETCore.App' '.NET Runtime' 'Microsoft.DotNet.Runtime.10' 'runtime' (Get-NetVersionForAspNet $aspnet) }
     }
 
     # ---------------------------------------------------------------------------- 2 where to
