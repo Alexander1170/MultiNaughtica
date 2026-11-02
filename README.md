@@ -56,6 +56,7 @@ This version ships **no player models**. To use one, put your own `.glb` file (a
 ## Things to know
 
 - **No support.** This is shared as it is. Nobody is obliged to fix bugs or answer questions. You are welcome to fork it and change it.
+- I will try to help fix issues that are reported but again there is no promise on the timeline. I am excited to share this with other but I am just one person with a Claude Sub haha but I am happy to try to fix what you report.
 - **Play only with people you trust.** The server relays what a client sends to the other clients and does not authenticate it, so a modified client can send things that harm other players or alter the world. Set a password and do not share it with strangers. See `SECURITY.md`.
 - **Back up your worlds.** Saves are in `%APPDATA%\Nitrox\saves`. The server keeps its last backups, but a copy of your own is cheap.
 - **Written mostly with AI tools.** Most of the code, tests and documentation of this fork were written with AI tools (Claude, from Anthropic), directed and checked by a person and play-tested in small groups. It has had far less play-testing than a mature mod.
