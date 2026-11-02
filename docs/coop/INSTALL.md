@@ -2,7 +2,7 @@
 
 ## You are the friend: five steps
 
-You need your own copy of **Subnautica** (the first game) on Steam. Everything else is installed for you.
+You need Windows 10 or 11 (64 bit) and your own copy of **Subnautica** (the first game; Steam is what has been tested). Everything else is installed for you if it is missing: `README.md` lists exactly what goes on your PC.
 
 1. **Unzip** the zip (right-click it, Extract All) anywhere.
 2. **Double-click `Install.cmd`** in the unzipped folder. If Windows says "Windows protected your PC", click **More info**, then **Run anyway**. It installs what is missing, finds Subnautica by itself and asks for the **server address your host gave you** (press Enter if you do not have it yet).
@@ -10,7 +10,7 @@ You need your own copy of **Subnautica** (the first game) on Steam. Everything e
 4. **Start "MultiNaughtica" from your desktop** and press **PLAY MULTIPLAYER**. (The first time, the launcher may ask to restart as administrator: allow it.)
 5. In the game choose **Multiplayer**, click your host's server, type your name and press **Join**. The first load takes a minute or two; when the game says "Press any button", press one.
 
-To play the normal single-player game, press **SINGLEPLAYER** in the launcher. To remove everything, run **Uninstall MultiNaughtica** from the Start menu (your worlds are kept). Running `Install.cmd` again is safe: it updates in place and keeps your worlds and settings; it asks before it replaces a different co-op build.
+To play the normal single-player game, press **SINGLEPLAYER** in the launcher. To remove the program, press **SINGLEPLAYER** once (it takes the patch out of the game), then run **Uninstall MultiNaughtica** from the Start menu (your worlds and the Microsoft runtimes are kept). Running `Install.cmd` again is safe: it updates in place and keeps your worlds and settings; it asks before it replaces a different co-op build.
 
 If something goes wrong, the installer says why in plain words and writes `%TEMP%\MultiNaughtica-install.log`; send that file to your host. Everybody who plays together must use **the same zip**: the game refuses a server of another build and tells you which one it is.
 
