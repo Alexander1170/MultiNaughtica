@@ -16,7 +16,7 @@ If something goes wrong, the installer says why in plain words and writes `%TEMP
 
 ## Player models (optional)
 
-This build ships **no** player models. If you want the other players to see you as a custom character, put your own `.glb` file into `%APPDATA%\Nitrox\models` and pick it in the game under Options, Nitrox, **Model the others see**. Everybody who should see you in it needs the same file. `docs/coop/PLAYER_MODELS.md` tells what the file has to be, how to describe it, and how to use emotes (hold **G**).
+This build ships **no** player models. If you want the other players to see you as a custom character, put your own `.glb` file into `%APPDATA%\Nitrox\models` and pick it in the game under Options, Nitrox, **Model the others see**. Everybody who should see you in it needs the same file. `PLAYER_MODELS.md` (next to this file in the zip, in `docs/coop` in the repository) tells where to get a model, what the file has to be, how to describe it, and how to use emotes (hold **G**).
 
 ## You are the host (this part is for the person who runs the server)
 

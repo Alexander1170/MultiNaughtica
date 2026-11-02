@@ -8,8 +8,8 @@ Nitrox is free software released under the GNU General Public License, version 3
 |---|---|
 | Original program | Nitrox, https://github.com/SubnauticaNitrox/Nitrox |
 | Based on | commit `7815b4e413aa690041ebf92210447fe1c95a21f8` of the `master` branch of Nitrox ("Add server loading progress display in launcher (#2593)", 2026-09-28) |
-| Modified | between 2026-09-28 and 2026-10-31 |
-| This version | build 17 of the fork (`CoopBuild` in `Directory.Build.props`, version `1.9.0.0-coop.17`), released 2026-10-31 |
+| Modified | between 2026-09-28 and 2026-11-02 |
+| This version | build 17 of the fork (`CoopBuild` in `Directory.Build.props`, version `1.9.0.0-coop.17`), built 2026-11-02 |
 
 ## What was changed, in broad terms
 

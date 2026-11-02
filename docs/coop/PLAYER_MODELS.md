@@ -1,6 +1,6 @@
 # Adding your own player model
 
-MultiNaughtica can show the other players as a custom 3D character instead of the normal diver. **No model is included**: you bring your own `.glb` file, put it in a folder, and pick it in the Options menu. This page tells you what the file has to be, where it goes, how to describe it in a small profile file, and how to check that it looks right in the game.
+MultiNaughtica can show the other players as a custom 3D character instead of the normal diver. **No model is included**: you bring your own `.glb` file, put it in a folder, and pick it in the Options menu. This page tells you where to get a model, what the file has to be, where it goes, how to describe it in a small profile file, and how to check that it looks right in the game.
 
 A model is optional in every way. With no model installed, the Options list shows only **Default** (the normal diver), there is no emote wheel, and nothing else changes.
 
@@ -8,10 +8,18 @@ Only use models you have the right to use. Many characters are somebody else's p
 
 ## In short
 
-1. Get a humanoid model as one **`.glb`** file, with a **Mixamo-style skeleton** (bones named `mixamorig:Hips`, `mixamorig:Spine`, and so on).
-2. Name it `player-<something>.glb` and put it in `%APPDATA%\Nitrox\models` (create the folder if it is not there).
+1. Get a humanoid model as one **`.glb`** file, with a **Mixamo-style skeleton** (bones named `mixamorig:Hips`, `mixamorig:Spine`, and so on). See "Getting a model".
+2. Name it `player-<something>.glb` and put it in `%APPDATA%\Nitrox\models`. To get there, paste `%APPDATA%\Nitrox` into the address bar of a File Explorer window, and make the `models` folder if it is not there.
 3. Start the game, press **Escape**, **Options**, the **Nitrox** tab. Under **Player model**, set **Model the others see** to your model.
 4. Everybody who should see you in it needs **the same file under the same name**. Otherwise they see the normal diver.
+5. **Look down** in the game: you see the model's legs and feet. If you still see the normal diver, see "If it does not work".
+
+## Getting a model
+
+The game needs a humanoid that is already rigged with Mixamo's skeleton and saved as one `.glb` file ("What the file has to be" has the details). Two ways to get one:
+
+- **A tool that rigs a humanoid and exports a `.glb` with Mixamo's bone names.** This is the way that was tested: the models used while making this fork came from [Meshy](https://www.meshy.ai), rigged there and downloaded as `.glb`. One of them needed the fix for "A finger chain that hangs off the forearm" under Pitfalls.
+- **[Mixamo](https://www.mixamo.com).** Upload a character or pick one of theirs, let Mixamo rig it, and download it as FBX. Mixamo has no `.glb` download, so open the FBX in Blender, apply the scale of the armature (see "Scaled nodes" under Pitfalls) and export it as **glTF Binary (.glb)** with the textures inside the file. This way has not been tried.
 
 ## Where the files go
 
@@ -22,15 +30,35 @@ Only use models you have the right to use. Many characters are somebody else's p
 
 If a file with the same name is in both folders, the one in `%APPDATA%\Nitrox\models` wins, together with the profile beside it.
 
+Uninstalling or updating MultiNaughtica does not remove your models: both only touch the files that the installer put there.
+
 The **id** of a model is its file name without `.glb`: 1 to 40 letters, digits, dots, dashes and underscores (`player-sample.glb` has the id `player-sample`). A file with any other name (blanks, other letters, too long) is skipped, and the game log says why.
 
-The model file is never sent over the network. When you pick a model, the game tells the others its id and the **length of the file**. A player sees you in it only if he has a file of that id and of that length. Otherwise he sees the normal diver and the log says so once.
+The model file is never sent over the network. When you pick a model, the game tells the others its id and the **length of the file**. Other players see you in it only if they have a file of that id and of that length. Otherwise they see the normal diver and the log says so once.
 
 ## Choosing a model
 
 **Options, Nitrox, Player model, Model the others see**: a list with **Default** and one entry per model that was found. The choice is saved with the game's settings and takes effect at once, in the middle of a game. Picking **Default** gives you the normal diver back. The folders are read once, the first time the game needs the list; if you add a file while the game runs, restart the game.
 
 **Show my model in first person** (same place, on by default): your own first-person view uses your model. Looking down, you see its legs and feet, and its arms and hands hold your tools, the PDA and the Cyclops wheel. Switch it off to see the normal diver's body again. The others always see your model, whatever this setting says.
+
+## If it does not work
+
+The game writes what it did into its log: `%APPDATA%\Nitrox\logs\game[<your name>]-<date>.log` (`game-<date>.log` if you have not joined a server yet). Search it for `[PlayerModels]`:
+
+| Line in the log | What it means |
+|---|---|
+| `0 models found:` | No file was found. Check the folder, and that the name really ends in `.glb` (Windows may hide the ending). |
+| `1 models found: player-sample` | The file was found, and this is its id. |
+| `the file ... cannot be a model` | The file name breaks the rules for an id. |
+| `the model 'player-sample' (...) could not be loaded: ...` | The file was refused, and the line says why. |
+| `loaded 'player-sample' ...` | The file was read. |
+| `told the server that this player wears 'player-sample' (... bytes)` | You are wearing it. |
+| `'player-sample' is worn by <name>: ...` | You see that player in it. |
+| `<name> wears the model 'player-sample' and this game has no file of that name` | That player wears a model that you do not have. |
+| `<name> wears the model 'player-sample' with a file of ... bytes and this game's file of ...` | You both have the file, but not the same one. |
+
+The folders are read once, the first time the game needs the list, so these lines appear after you join a server or open the list in the Options menu.
 
 ## What the file has to be
 

@@ -51,7 +51,7 @@ On top of Nitrox's multiplayer, this fork has (see `docs/coop` for the details o
 
 ## Player models
 
-This version ships **no player models**. To use one, put your own `.glb` file (a humanoid with a Mixamo-style skeleton) into `%APPDATA%\Nitrox\models`, then choose it in the game under Options, Nitrox, **Model the others see**. The other players only see it if they have the same file. With no model installed, the list only shows **Default** and there is no emote wheel. `docs/coop/PLAYER_MODELS.md` explains what the file has to be, the profile file, tuning and emotes. Only use models you have the right to use.
+This version ships **no player models**. To use one, put your own `.glb` file (a humanoid with a Mixamo-style skeleton) into `%APPDATA%\Nitrox\models`, then choose it in the game under Options, Nitrox, **Model the others see**. The other players only see it if they have the same file. With no model installed, the list only shows **Default** and there is no emote wheel. `docs/coop/PLAYER_MODELS.md` (also in the zip) explains where to get a model, what the file has to be, the profile file, tuning and emotes. Only use models you have the right to use.
 
 ## Things to know
 
