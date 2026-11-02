@@ -36,7 +36,7 @@ You have to bring these yourself. The installer cannot get them for you:
 - **An internet connection and permission to install software**, if your PC is missing the two Microsoft runtimes listed below. Windows may ask you to allow them.
 - Everybody who plays together must use **the same zip**. The game refuses a server of another build and tells you so.
 
-You do **not** need stock Nitrox, BepInEx or QModManager. Other mods are not supported in multiplayer, and the launcher warns you if it finds them in the game folder. Do not run the launcher of stock Nitrox at the same time: both patch the same game folder.
+You do **not** need to install Nitrox: this download is a complete, modified Nitrox with its own launcher, server and game client. You do not need BepInEx or QModManager either. Other mods are not supported in multiplayer, and the launcher warns you if it finds them in the game folder. Do not run the launcher of stock Nitrox at the same time: both patch the same game folder.
 
 ## What the installer puts on your PC
 
@@ -46,7 +46,7 @@ You do **not** need stock Nitrox, BepInEx or QModManager. Other mods are not sup
 |---|---|---|---|
 | **Microsoft .NET Runtime 10** (x64, about 80 MB) | `C:\Program Files\dotnet` | Only if it is missing or too old | No, other programs may need it |
 | **Microsoft ASP.NET Core Runtime 10** (x64, about 30 MB) | `C:\Program Files\dotnet` | Only if it is missing or too old | No, other programs may need it |
-| **MultiNaughtica** (about 60 MB) | `%LOCALAPPDATA%\MultiNaughtica`, or a folder you pick | Always | Yes |
+| **MultiNaughtica**, the complete modified Nitrox (about 60 MB) | `%LOCALAPPDATA%\MultiNaughtica`, or a folder you pick | Always | Yes |
 | Shortcuts: **MultiNaughtica** on the desktop and in the Start menu, **Uninstall MultiNaughtica** in the Start menu | Desktop and Start menu | Always | Yes |
 | The folder of your game | Registry, `HKCU\SOFTWARE\Nitrox`, value `PreferredGamePath` | When it finds the game | No |
 | The server address you type | `%APPDATA%\Nitrox\servers` | Only if you type one | No |
@@ -62,7 +62,7 @@ It does **not** install Subnautica or any player model, and it adds no backgroun
 
 ## Install
 
-1. Download the zip from the Releases page and unzip it anywhere (not into the Subnautica folder, not into `Program Files`).
+1. Download the `MultiNaughtica_..._win_x64.zip` file from the [Releases page](https://github.com/Alexander1170/MultiNaughtica/releases/latest), under **Assets**. Do not use **Source code (zip)** or the green **Code** button: they only hold the source and install nothing. Unzip the file anywhere (not into the Subnautica folder, not into `Program Files`).
 2. Double-click **`Install.cmd`**. If Windows says "Windows protected your PC", click **More info**, then **Run anyway**. It installs the two runtimes if they are missing or too old, finds Subnautica, sets everything up and asks for the server address your host gave you (Enter skips that).
 3. Start **MultiNaughtica** from your desktop and press **PLAY MULTIPLAYER**. In the game choose **Multiplayer**, pick the server and join.
 
